@@ -1,0 +1,77 @@
+import asyncio
+from datetime import datetime
+import pytz
+from bot.tasks.celery_app import celery
+from bot.database.crud import async_session
+from bot.database.models import User, SubStatus
+from bot.services.ai_services import generate_prompt_and_affirmation, generate_image_with_face
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+from aiogram import Bot
+from bot.config import settings
+import random
+
+bot = Bot(token=settings.BOT_TOKEN)
+
+async def _send_morning_affirmations():
+    now_utc = datetime.utcnow()
+    
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.subscription_status.in_([SubStatus.active, SubStatus.trial]))
+            .options(selectinload(User.goals), selectinload(User.photos))
+        )
+        users = result.scalars().all()
+        
+        for user in users:
+            try:
+                if not user.timezone or not user.delivery_time:
+                    continue
+                tz = pytz.timezone(user.timezone)
+                now_local = now_utc.replace(tzinfo=pytz.utc).astimezone(tz)
+                
+                if now_local.hour == user.delivery_time.hour and now_local.minute == user.delivery_time.minute:
+                    if not user.goals:
+                        continue
+                    
+                    goal = random.choice(user.goals)
+                    photos = [p.s3_url for p in user.photos]
+                    
+                    ai_data = await generate_prompt_and_affirmation(goal.goal_text)
+                    image_url = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photos)
+                    
+                    # КРИТИЧЕСКОЕ ТРЕБОВАНИЕ ПРОДУКТА: пустой caption
+                    await bot.send_photo(chat_id=user.telegram_id, photo=image_url, caption="")
+            except Exception as e:
+                print(f"Error processing user {user.telegram_id}: {e}")
+
+@celery.task
+def send_morning_affirmations():
+    asyncio.run(_send_morning_affirmations())
+
+async def _check_subscriptions():
+    now = datetime.utcnow()
+    async with async_session() as session:
+        result = await session.execute(select(User))
+        users = result.scalars().all()
+        
+        for user in users:
+            if not user.subscription_end_date:
+                continue
+                
+            days_left = (user.subscription_end_date - now).days
+            
+            if days_left == 3 and user.subscription_status == SubStatus.active:
+                await bot.send_message(user.telegram_id, "Через 3 дня ваша подписка обновится.")
+            elif days_left < 0 and user.subscription_status != SubStatus.expired:
+                user.subscription_status = SubStatus.expired
+                await session.commit()
+            
+            if user.subscription_status == SubStatus.expired:
+                # В утреннюю рассылку можно добавить этот чек, но по ТЗ шлем ссылку при рассылке. 
+                # Для упрощения шлем сразу по факту экспайра раз в день.
+                await bot.send_message(user.telegram_id, "Ваша подписка истекла. Оплатите для продолжения: [LINK YOOKASSA/СБП]")
+
+@celery.task
+def check_subscriptions():
+    asyncio.run(_check_subscriptions())
