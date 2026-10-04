@@ -62,15 +62,18 @@ async def _check_subscriptions():
             days_left = (user.subscription_end_date - now).days
             
             if days_left == 3 and user.subscription_status == SubStatus.active:
-                await bot.send_message(user.telegram_id, "Через 3 дня ваша подписка обновится.")
+                await bot.send_message(
+                    user.telegram_id,
+                    "Через 3 дня твой доступ закончится. Чтобы продлить, активируй промокод: /promo КОД")
             elif days_left < 0 and user.subscription_status != SubStatus.expired:
                 user.subscription_status = SubStatus.expired
                 await session.commit()
-            
+
             if user.subscription_status == SubStatus.expired:
-                # В утреннюю рассылку можно добавить этот чек, но по ТЗ шлем ссылку при рассылке. 
-                # Для упрощения шлем сразу по факту экспайра раз в день.
-                await bot.send_message(user.telegram_id, "Ваша подписка истекла. Оплатите для продолжения: [LINK YOOKASSA/СБП]")
+                await bot.send_message(
+                    user.telegram_id,
+                    "Твой доступ истёк. Продлить его можно промокодом: отправь /promo КОД\n"
+                    "Получить код можно у администратора бота.")
 
 @celery.task
 def check_subscriptions():

@@ -12,8 +12,6 @@ class Settings(BaseSettings):
     YOOKASSA_ACCOUNT_ID: str = ""
     YOOKASSA_SECRET_KEY: str = ""
     ADMIN_TELEGRAM_ID: int = 0
-    # Секретные промокоды: "КОД:дни,КОД2:дни" (активация бесплатной подписки)
-    PROMO_CODES: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra='ignore')
 

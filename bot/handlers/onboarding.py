@@ -23,7 +23,8 @@ HELP_TEXT = (
     "/help — показать эту инструкцию\n"
     "/photo — заменить фото-референсы (новое лицо: загрузка 1-5 фото)\n"
     "/goals — изменить список целей (фото и расписание не трогаются)\n"
-    "/reset — полный сброс: удалить фото и цели, начать онбординг заново\n\n"
+    "/reset — полный сброс: удалить фото и цели, начать онбординг заново\n"
+    "/promo КОД — активировать промокод (продление доступа)\n\n"
     "<b>Как это работает:</b>\n"
     "• Фото: 1-5 чётких фото лица крупным планом (анфас, вполоборота, разный свет) — чем качественнее, тем выше сходство.\n"
     "• Цели: до 10, можно одним сообщением (разделяй строками, точками или запятыми).\n"
@@ -46,11 +47,11 @@ async def start_cmd(message: Message, state: FSMContext):
         if not user:
             user = await create_user(session, message.from_user.id, message.from_user.username)
             user.subscription_status = SubStatus.trial
-            user.subscription_end_date = datetime.utcnow() + timedelta(days=1)
+            user.subscription_end_date = datetime.utcnow() + timedelta(days=3)
             await session.commit()
 
     await message.answer(
-        "Привет! У тебя активирован Trial на 1 день.\n"
+        "Привет! У тебя активирован Trial на 3 дня.\n"
         "Отправь мне от 1 до 5 своих фотографий (лицо крупным планом). Лучше 3-5: анфас, вполоборота, при разном освещении — так сходство будет выше.\n"
         "Когда закончишь — напиши «готово» или сразу пришли список целей.\n\n"
         + HELP_TEXT,

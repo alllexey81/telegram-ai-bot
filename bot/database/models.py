@@ -1,4 +1,5 @@
 import enum
+import datetime
 from sqlalchemy import Column, Integer, String, BigInteger, Time, Enum, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -39,3 +40,15 @@ class Goal(Base):
     goal_text = Column(String, nullable=False)
 
     user = relationship("User", back_populates="goals")
+
+
+class PromoCode(Base):
+    """Одноразовый промокод: активирует подписку на days дней первому использовавшему."""
+    __tablename__ = 'promo_codes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String, unique=True, nullable=False)
+    days = Column(Integer, nullable=False, default=30)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    used_by = Column(BigInteger, nullable=True)
+    used_at = Column(DateTime, nullable=True)
