@@ -2,7 +2,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from bot.config import settings
-from bot.handlers import onboarding, admin
+from bot.handlers import onboarding, admin, promo
 
 logging.basicConfig(level=logging.INFO)
 
@@ -12,6 +12,7 @@ async def main():
     
     dp.include_router(onboarding.router)
     dp.include_router(admin.router)
+    dp.include_router(promo.router)
     
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
