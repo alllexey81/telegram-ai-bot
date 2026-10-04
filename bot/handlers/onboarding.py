@@ -172,22 +172,78 @@ async def process_goals(message: Message, state: FSMContext):
     await state.set_state(Onboarding.timezone)
 
 
+CITY_TZ_MAP = {
+    "москва": "Europe/Moscow", "мск": "Europe/Moscow",
+    "иркутск": "Asia/Irkutsk", "иркутская": "Asia/Irkutsk",
+    "санкт-петербург": "Europe/Moscow", "спб": "Europe/Moscow", "питер": "Europe/Moscow",
+    "новосибирск": "Asia/Novosibirsk", "омск": "Asia/Omsk",
+    "екатеринбург": "Asia/Yekaterinburg", "челябинск": "Asia/Yekaterinburg",
+    "уфа": "Asia/Yekaterinburg", "пермь": "Asia/Yekaterinburg",
+    "казань": "Europe/Moscow", "нижний новгород": "Europe/Moscow",
+    "самара": "Europe/Samara", "тольятти": "Europe/Samara", "ижевск": "Europe/Samara",
+    "красноярск": "Asia/Krasnoyarsk", "владивосток": "Asia/Vladivostok",
+    "хабаровск": "Asia/Vladivostok", "новокузнецк": "Asia/Novokuznetsk",
+    "кемерово": "Asia/Novokuznetsk", "барнаул": "Asia/Barnaul",
+    "сочи": "Europe/Moscow", "краснодар": "Europe/Moscow", "ростов": "Europe/Moscow",
+    "воронеж": "Europe/Moscow", "волгоград": "Europe/Volgograd",
+    "тюмень": "Asia/Yekaterinburg", "сургут": "Asia/Yekaterinburg",
+    "ялта": "Europe/Simferopol", "севастополь": "Europe/Simferopol", "симферополь": "Europe/Simferopol",
+    "калининград": "Europe/Kaliningrad",
+}
+# Слова-мусор, которые выкидываем перед сопоставлением города
+_CITY_NOISE = ("обл.", "обл", "область", "обл,", "край", "республика", "г.", "г,", "город")
+
+
+def parse_time_loose(text: str):
+    """Ищет время в тексте: HH:MM, HH-MM, HH.MM, '6:09' и т.п.
+    Возвращает объект time или None."""
+    import re
+    # HH:MM, HH-MM, HH.MM (в т.ч. '6:09'); неполные значения вроде '07-112' не матчатся
+    m = re.search(r'\b(\d{1,2})\s*[:.\-–]\s*(\d{2})\b', text)
+    if not m:
+        return None
+    try:
+        t = datetime.strptime(f"{m.group(1)}:{m.group(2)}", "%H:%M").time()
+        return t
+    except ValueError:
+        return None
+
+
+def parse_city_tz(text: str) -> str:
+    """Нечёткое определение таймзоны по городу: убирает суффиксы (обл., край, г.),
+    нормализует и сопоставляет по словарю, при опечатках — difflib."""
+    import difflib
+    raw = (text or "").lower().replace("ё", "е")
+    # Цифры (время) не участвуют в определении города
+    words = [w for w in raw.split() if not any(ch.isdigit() for ch in w)]
+    words = [w.strip(".,;:!\"'()") for w in words]
+    words = [w for w in words if w and w not in _CITY_NOISE]
+    candidates = [" ".join(words[i:j]) for i in range(len(words)) for j in range(i + 1, len(words) + 1)]
+    for cand in candidates:
+        if cand in CITY_TZ_MAP:
+            return CITY_TZ_MAP[cand]
+    # Нечёткое сопоставление (опечатки): каждое слово и пара слов, порог 0.8
+    for cand in words + candidates:
+        best = difflib.get_close_matches(cand, CITY_TZ_MAP.keys(), n=1, cutoff=0.8)
+        if best:
+            return CITY_TZ_MAP[best[0]]
+    return "Europe/Moscow"
+
+
 @router.message(Onboarding.timezone, F.text)
 async def process_timezone(message: Message, state: FSMContext):
     import re
     text = message.text
 
-    time_match = re.search(r'\b([0-9]{1,2}:[0-9]{2})\b', text)
-    if not time_match:
-        await message.answer("Я не нашел время в твоем сообщении. Напиши, пожалуйста, время в формате HH:MM (например: 16:20)")
+    delivery_time = parse_time_loose(text)
+    if not delivery_time:
+        await message.answer("Я не нашел время в твоем сообщении. Напиши, пожалуйста, время в формате HH:MM (например: Иркутск 16:20)")
         return
 
-    time_str = time_match.group(1)
+    time_str = delivery_time.strftime("%H:%M")
 
     try:
-        delivery_time = datetime.strptime(time_str, "%H:%M").time()
-
-        tz_str = "Asia/Irkutsk" if "иркутск" in text.lower() else "Europe/Moscow"
+        tz_str = parse_city_tz(text)
 
         async with async_session() as session:
             user = await get_user(session, message.from_user.id)
