@@ -19,6 +19,8 @@ class User(Base):
     delivery_time = Column(Time, nullable=True)
     subscription_status = Column(Enum(SubStatus), default=SubStatus.trial)
     subscription_end_date = Column(DateTime, nullable=True)
+    # Когда пользователь последний раз получал картинку (тестовую или ежедневную)
+    last_generation_at = Column(DateTime, nullable=True)
 
     photos = relationship("Photo", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")

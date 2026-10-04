@@ -42,6 +42,10 @@ async def _send_morning_affirmations():
                     
                     # КРИТИЧЕСКОЕ ТРЕБОВАНИЕ ПРОДУКТА: пустой caption
                     await bot.send_photo(chat_id=user.telegram_id, photo=image_url, caption="")
+
+                    # Фиксируем время последней генерации (для кулдауна тестовой)
+                    user.last_generation_at = datetime.utcnow()
+                    await session.commit()
             except Exception as e:
                 print(f"Error processing user {user.telegram_id}: {e}")
 

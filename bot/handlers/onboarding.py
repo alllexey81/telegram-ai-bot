@@ -11,6 +11,7 @@ from sqlalchemy.future import select
 from bot.database.crud import async_session, get_user, create_user
 from bot.database.models import SubStatus, Photo, Goal
 from bot.services.s3_service import upload_photo
+from bot.config import settings
 from bot.services.ai_services import generate_prompt_and_affirmation, generate_image_with_face
 
 router = Router()
@@ -62,6 +63,16 @@ async def start_cmd(message: Message, state: FSMContext):
 
 @router.message(Command("reset"))
 async def reset_cmd(message: Message, state: FSMContext):
+    # Лимит: не больше 3 сбросов в сутки с одного юзера (счётчик в Redis на 24ч)
+    from redis import asyncio as aioredis
+    redis = aioredis.from_url(settings.REDIS_URL)
+    rkey = f"reset:{message.from_user.id}:{datetime.utcnow().strftime('%Y%m%d')}"
+    resets_today = await redis.incr(rkey)
+    await redis.expire(rkey, 86400)
+    if resets_today > 3:
+        await message.answer("Лимит сбросов исчерпан (3 в день). Попробуй завтра.")
+        return
+
     from sqlalchemy import delete
     async with async_session() as session:
         await session.execute(delete(Goal).where(Goal.user_id == message.from_user.id))
@@ -265,6 +276,13 @@ async def process_timezone(message: Message, state: FSMContext):
         await state.clear()
 
         if goals and photos:
+            # Кулдаун тестовой генерации: не чаще 1 раза в 24 часа (защита от спама рестартами)
+            last_gen = user.last_generation_at
+            if last_gen and last_gen > datetime.utcnow() - timedelta(hours=24):
+                await message.answer(
+                    "Ты уже получал картинку за последние 24 часа — следующая придёт по твоему расписанию. "
+                    "До скорого!")
+                return
             try:
                 goal = random.choice(goals)
                 photo_urls = [p.s3_url for p in photos]
@@ -288,6 +306,11 @@ async def process_timezone(message: Message, state: FSMContext):
                 else:
                     await message.answer_photo(
                         photo=BufferedInputFile(result.image_bytes, filename="affirmation.png"), caption="")
+                # Фиксируем время последней генерации (для кулдауна)
+                async with async_session() as s:
+                    u = await get_user(s, message.from_user.id)
+                    u.last_generation_at = datetime.utcnow()
+                    await s.commit()
             except Exception as e:
                 await message.answer(f"Произошла ошибка при генерации тестовой картинки: {e}")
         else:
