@@ -1,0 +1,15 @@
+# Секреты
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Локальные данные пользователей (фото-референсы)
+photos/
+
+# Celery
+celerybeat-schedule
+
+# Временные файлы
+shot.png

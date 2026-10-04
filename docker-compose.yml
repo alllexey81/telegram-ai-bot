@@ -13,6 +13,17 @@ services:
     volumes:
       - .:/app
 
+  photo_server:
+    build: .
+    command: python photo_server.py
+    env_file: .env
+    environment:
+      PHOTO_SERVER_PORT: "8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+
   celery_worker:
     build: .
     command: celery -A bot.tasks.celery_app worker --loglevel=info

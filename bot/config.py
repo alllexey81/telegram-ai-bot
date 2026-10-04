@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str
     YOOKASSA_ACCOUNT_ID: str = ""
     YOOKASSA_SECRET_KEY: str = ""
+    ADMIN_TELEGRAM_ID: int = 0
 
     model_config = SettingsConfigDict(env_file=".env", extra='ignore')
 
