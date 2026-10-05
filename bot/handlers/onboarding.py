@@ -38,6 +38,7 @@ HELP_TEXT = (
 class Onboarding(StatesGroup):
     photos = State()
     goals = State()
+    gender = State()
     timezone = State()
 
 
@@ -179,7 +180,30 @@ async def process_goals(message: Message, state: FSMContext):
 
     await message.answer(
         f"Принято целей: {len(goals_list)}.\n"
-        "Отлично! Напиши свой город и время доставки в формате HH:MM (например: Иркутск 16:20)."
+        "Укажи свой пол (мужчина или женщина) — это нужно, чтобы на картинках рядом с тобой "
+        "появлялась правильная семья: муж/жена и дети, без посторонних."
+    )
+    await state.set_state(Onboarding.gender)
+
+
+@router.message(Onboarding.gender, F.text)
+async def process_gender(message: Message, state: FSMContext):
+    text = (message.text or "").lower().strip()
+    if any(w in text for w in ("муж", "м", "парень", "man", "male")) and "жен" not in text:
+        gender = "male"
+    elif any(w in text for w in ("жен", "девуш", "ж", "woman", "female", "баба")):
+        gender = "female"
+    else:
+        await message.answer("Не понял. Напиши одним словом: мужчина или женщина.")
+        return
+
+    async with async_session() as session:
+        user = await get_user(session, message.from_user.id)
+        user.gender = gender
+        await session.commit()
+
+    await message.answer(
+        "Принято! Напиши свой город и время доставки в формате HH:MM (например: Иркутск 16:20)."
     )
     await state.set_state(Onboarding.timezone)
 
@@ -287,8 +311,8 @@ async def process_timezone(message: Message, state: FSMContext):
                 goal = random.choice(goals)
                 photo_urls = [p.s3_url for p in photos]
 
-                ai_data = await generate_prompt_and_affirmation(goal.goal_text)
-                result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls)
+                ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male")
+                result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male")
 
                 # ТЗ: caption должен быть пустым
                 from aiogram.types import BufferedInputFile

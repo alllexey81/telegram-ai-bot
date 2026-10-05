@@ -19,7 +19,8 @@ class User(Base):
     delivery_time = Column(Time, nullable=True)
     subscription_status = Column(Enum(SubStatus), default=SubStatus.trial)
     subscription_end_date = Column(DateTime, nullable=True)
-    # Когда пользователь последний раз получал картинку (тестовую или ежедневную)
+    # Пол пользователя: male/female - влияет на состав семьи в генерациях
+    gender = Column(String, nullable=True)
     last_generation_at = Column(DateTime, nullable=True)
 
     photos = relationship("Photo", back_populates="user", cascade="all, delete-orphan")

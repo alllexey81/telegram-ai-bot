@@ -37,8 +37,9 @@ async def _send_morning_affirmations():
                     goal = random.choice(user.goals)
                     photos = [p.s3_url for p in user.photos]
                     
-                    ai_data = await generate_prompt_and_affirmation(goal.goal_text)
-                    image_url = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photos)
+                    gender = user.gender or "male"
+                    ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender)
+                    image_url = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photos, gender)
                     
                     # КРИТИЧЕСКОЕ ТРЕБОВАНИЕ ПРОДУКТА: пустой caption
                     await bot.send_photo(chat_id=user.telegram_id, photo=image_url, caption="")
