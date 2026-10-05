@@ -312,8 +312,8 @@ async def process_timezone(message: Message, state: FSMContext):
                 goal = random.choice(goals)
                 photo_urls = [p.s3_url for p in photos]
 
-                ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male")
-                result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male")
+                ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male", user.prompt_extra)
+                result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male", user.prompt_extra)
 
                 from bot.services.gen_store import save_generated
                 if isinstance(result, str):

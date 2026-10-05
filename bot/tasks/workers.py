@@ -56,9 +56,9 @@ async def _send_morning_affirmations():
                         photos = [p.s3_url for p in user.photos]
 
                         gender = user.gender or "male"
-                        ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender)
+                        ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender, user.prompt_extra)
                         img_result = await generate_image_with_face(
-                            ai_data['prompt'], ai_data['affirmation'], photos, gender)
+                            ai_data['prompt'], ai_data['affirmation'], photos, gender, user.prompt_extra)
                         img_bytes = (await _fetch_bytes(img_result)
                                      if isinstance(img_result, str) else img_result.image_bytes)
 

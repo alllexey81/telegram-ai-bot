@@ -21,6 +21,8 @@ class User(Base):
     subscription_end_date = Column(DateTime, nullable=True)
     # Пол пользователя: male/female - влияет на состав семьи в генерациях
     gender = Column(String, nullable=True)
+    # Индивидуальные требования пользователя к промпту (напр. "без детей", "только мужчины")
+    prompt_extra = Column(String, nullable=True)
     last_generation_at = Column(DateTime, nullable=True)
 
     photos = relationship("Photo", back_populates="user", cascade="all, delete-orphan")

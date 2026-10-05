@@ -54,7 +54,7 @@ def get_daily_style() -> tuple[str, str]:
     return STYLES[day_index]
 
 
-async def generate_prompt_and_affirmation(goal_text: str, gender: str = "male") -> dict:
+async def generate_prompt_and_affirmation(goal_text: str, gender: str = "male", extra: str | None = None) -> dict:
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
@@ -70,11 +70,17 @@ async def generate_prompt_and_affirmation(goal_text: str, gender: str = "male") 
             "The user is a MAN. If the scene involves family or loved ones, they must be ONLY his wife (a woman) and their children. "
             "NEVER include any other adult men (except the user himself) - no male friends, colleagues, relatives or strangers."
         )
+    extra_rule = ""
+    if extra and extra.strip():
+        extra_rule = (
+            f" ADDITIONAL MANDATORY USER REQUIREMENTS (must be strictly followed, translate to English): "
+            f"{extra.strip()}"
+        )
     sys_prompt = (
         "Ты сценарист и психолог. На основе цели пользователя ({goal_text}) напиши короткую поддерживающую аффирмацию "
         "(до 5 слов, ОБЯЗАТЕЛЬНО на русском языке, кириллицей) и подробный англоязычный промпт для генератора изображений. "
         "КРИТИЧЕСКИ ВАЖНО: промпт не должен содержать лиц других людей "
-        "(используй ракурсы со спины или силуэты для второстепенных персонажей). " + family_rule + " "
+        "(используй ракурсы со спины или силуэты для второстепенных персонажей). " + family_rule + extra_rule + " "
         "Верни строго JSON с ключами: 'prompt', 'affirmation'."
     )
 
@@ -121,7 +127,7 @@ async def _to_ref_url(photo: str):
     return photo
 
 
-async def generate_image_with_face(prompt: str, affirmation: str, user_photos: list, gender: str = "male"):
+async def generate_image_with_face(prompt: str, affirmation: str, user_photos: list, gender: str = "male", extra: str | None = None):
     """Генерирует изображение через GPT Image (OpenRouter /api/v1/images).
     Референсы фотографий пользователя передаются инлайн (base64), т.к.
     GPT Image принимает только публичные URL или встроенные данные."""
@@ -150,10 +156,16 @@ async def generate_image_with_face(prompt: str, affirmation: str, user_photos: l
             "face and hairstyle precisely. If family members appear, ONLY his wife and their children - "
             "no other adult men, no male friends or strangers."
         )
+    extra_rule = ""
+    if extra and extra.strip():
+        extra_rule = (
+            f" ADDITIONAL MANDATORY REQUIREMENTS (strictly follow): {extra.strip()}."
+        )
     scene = (
         f"Render this scene as a {style_desc}: {style_face_rule}. "
         f"{prompt}. "
         f"{identity_rule} "
+        f"{extra_rule}"
         f"Bold elegant typography is rendered prominently on the image with this EXACT Russian text in Cyrillic script: "
         f"«{affirmation}». The on-image text MUST be in Russian Cyrillic letters, copy it letter-for-letter, "
         f"no translation, no English words on the image."

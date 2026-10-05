@@ -89,6 +89,9 @@ details summary {{ cursor:pointer; color:#8fa8ff; font-size:13px; margin-top:6px
 .status {{ font-size:13px; color:#7dd97d; min-height:18px; margin-top:6px; }}
 input[type=password] {{ background:#171a21; color:#e6e6e6; border:1px solid #2a2f3a; border-radius:8px; padding:10px; width:260px; }}
 input[type=checkbox] {{ width:18px; height:18px; }}
+#lightbox {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:100;
+  cursor:zoom-out; align-items:center; justify-content:center; }}
+#lightbox img {{ max-width:95vw; max-height:95vh; border-radius:8px; }}
 </style></head><body>{body}</body></html>"""
 
 
@@ -152,6 +155,11 @@ def user_card(u, logs) -> str:
    <input type="time" id="dt{u.telegram_id}" value="{delivery_val}">
    <button onclick="saveProfile({u.telegram_id}, this)">💾 Сохранить ТЗ/время</button>
   </div>
+  <div class="editrow">
+   <input type="text" id="ex{u.telegram_id}" value="{html.escape(u.prompt_extra or '')}"
+     style="flex:1" placeholder="Особые требования к промпту (напр.: без детей, только мужчины на фото, без женщин)">
+   <button onclick="saveExtra({u.telegram_id}, this)">💾 Сохранить требования</button>
+  </div>
   <textarea id="gl{u.telegram_id}" placeholder="По одной цели на строку">{html.escape(goals_text)}</textarea>
   <div class="editrow"><button onclick="saveGoals({u.telegram_id}, this)">💾 Сохранить цели</button></div>
  </details>
@@ -192,6 +200,14 @@ async def index(request):
  <span class="status" id="bulkstatus"></span>
 </div>
 {cards}
+<div id="lightbox" onclick="this.style.display='none'"><img id="lbimg"></div>
+<script>
+function lb(src) {{ document.getElementById('lbimg').src = src; document.getElementById('lightbox').style.display = 'flex'; }}
+document.addEventListener('DOMContentLoaded', () => {{
+  document.querySelectorAll('.logtbl td img').forEach(i => i.onclick = () => lb(i.src));
+  document.querySelectorAll('.thumbwrap > img').forEach(i => i.onclick = () => lb(i.src));
+}});
+</script>
 <script>
 function toggleAll(cb) {{ document.querySelectorAll('.sel').forEach(c => c.checked = cb.checked); }}
 function st(id) {{ return document.getElementById('st' + id); }}
@@ -254,6 +270,15 @@ async function saveProfile(id, btn) {{
   if (j.ok) setTimeout(() => location.reload(), 1200);
   btn.disabled = false;
 }}
+async function saveExtra(id, btn) {{
+  btn.disabled = true;
+  const r = await fetch('/api/extra', {{ method: 'POST',
+    headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{ id, extra: document.getElementById('ex' + id).value }}) }});
+  const j = await r.json();
+  st(id).textContent = j.ok ? '✅ требования сохранены' : '❌ ' + (j.error || 'ошибка');
+  btn.disabled = false;
+}}
 async function saveGoals(id, btn) {{
   btn.disabled = true;
   const goals = document.getElementById('gl' + id).value;
@@ -311,8 +336,8 @@ async def _send_to_users(ids):
                 goal = secrets.choice(list(u.goals))
                 photos = [p.s3_url for p in u.photos]
                 gender = u.gender or "male"
-                ai = await generate_prompt_and_affirmation(goal.goal_text, gender)
-                result = await generate_image_with_face(ai['prompt'], ai['affirmation'], photos, gender)
+                ai = await generate_prompt_and_affirmation(goal.goal_text, gender, u.prompt_extra)
+                result = await generate_image_with_face(ai['prompt'], ai['affirmation'], photos, gender, u.prompt_extra)
                 if isinstance(result, str):
                     import aiohttp as ah
                     async with ah.ClientSession() as hs:
@@ -464,6 +489,26 @@ async def api_del_photo(request):
         await engine.dispose()
 
 
+async def api_extra(request):
+    if not check_login(request):
+        return web.json_response({"ok": False, "error": "unauthorized"})
+    data = await request.json()
+    uid = int(data["id"])
+    engine, S = task_engine()
+    try:
+        async with S() as session:
+            u = await session.get(User, uid)
+            if not u:
+                return web.json_response({"ok": False, "error": "user not found"})
+            u.prompt_extra = (data.get("extra") or "").strip() or None
+            await session.commit()
+        return web.json_response({"ok": True})
+    except Exception as e:
+        return web.json_response({"ok": False, "error": str(e)})
+    finally:
+        await engine.dispose()
+
+
 async def photo_handler(request):
     if not check_login(request):
         return web.HTTPForbidden()
@@ -489,6 +534,7 @@ routes.router.add_get("/api/send", api_send)
 routes.router.add_get("/api/grant", api_grant)
 routes.router.add_post("/api/profile", api_profile)
 routes.router.add_post("/api/goals", api_goals)
+routes.router.add_post("/api/extra", api_extra)
 routes.router.add_post("/api/upload", api_upload)
 routes.router.add_get("/api/del_photo", api_del_photo)
 routes.router.add_get("/photo/{name}", photo_handler)
