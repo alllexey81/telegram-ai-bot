@@ -62,13 +62,16 @@ async def generate_prompt_and_affirmation(goal_text: str, gender: str = "male", 
     }
     if gender == "female":
         family_rule = (
-            "The user is a WOMAN. If the scene involves family or loved ones, they must be ONLY her husband (a man) and their children. "
-            "NEVER include any other adult men or adult women besides the user herself and her husband."
+                    "The user is a WOMAN. Include family members ONLY if the goal text explicitly mentions family, husband or children - "
+            "then ONLY her husband and their children. If the goal does NOT mention family, do NOT add any family members. "
+            "NEVER include any other adult men or adult women besides the user herself and (if explicitly required) her husband."
         )
     else:
         family_rule = (
-            "The user is a MAN. If the scene involves family or loved ones, they must be ONLY his wife (a woman) and their children. "
-            "NEVER include any other adult men (except the user himself) - no male friends, colleagues, relatives or strangers."
+            "The user is a MAN. Include family members ONLY if the goal text explicitly mentions family, wife or children - "
+            "then ONLY his wife (a woman) and their children. If the goal does NOT mention family (e.g. it mentions friends, "
+            "colleagues, collecting berries, fishing), do NOT add a wife or children - show ONLY the user himself. "
+            "NEVER include any other adult men (except the user himself) - no male friends' faces, colleagues or strangers."
         )
     extra_rule = ""
     if extra and extra.strip():
@@ -147,14 +150,17 @@ async def generate_image_with_face(prompt: str, affirmation: str, user_photos: l
     if gender == "female":
         identity_rule = (
             "The main person in the scene IS the exact woman from the reference photo - preserve her facial identity, "
-            "face and hairstyle precisely. If family members appear, ONLY her husband and their children - "
-            "no other adult men, no other adult women."
+            "face and hairstyle precisely. Add family members ONLY if the scene prompt explicitly includes them - "
+            "then ONLY her husband and children. Otherwise show ONLY the user, no invented family. "
+            "No other adult men, no other adult women."
         )
     else:
         identity_rule = (
             "The main person in the scene IS the exact man from the reference photo - preserve his facial identity, "
-            "face and hairstyle precisely. If family members appear, ONLY his wife and their children - "
-            "no other adult men, no male friends or strangers."
+            "face and hairstyle precisely. Add family members ONLY if the scene prompt explicitly includes them - "
+            "then ONLY his wife and children. If the scene mentions friends or companions, they must be in the background "
+            "or from behind, with NO visible faces, and NEVER additional adult men in front. "
+            "Do not invent a family if the scene does not ask for one."
         )
     extra_rule = ""
     if extra and extra.strip():
