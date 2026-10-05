@@ -67,3 +67,5 @@ class DeliveryLog(Base):
     goal_text = Column(String, nullable=True)
     success = Column(Integer, nullable=False, default=1)  # 1 успех, 0 ошибка
     error = Column(String, nullable=True)
+    # Путь к сгенерированной картинке (относительно /app/photos) для просмотра в админке
+    image_path = Column(String, nullable=True)

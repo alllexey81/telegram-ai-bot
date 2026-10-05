@@ -22,6 +22,13 @@ def _task_sessionmaker():
     return engine, async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+async def _fetch_bytes(url: str) -> bytes:
+    import aiohttp
+    async with aiohttp.ClientSession() as s:
+        async with s.get(url) as r:
+            return await r.read()
+
+
 async def _send_morning_affirmations():
     now_utc = datetime.utcnow()
     engine, session_factory = _task_sessionmaker()
@@ -50,16 +57,24 @@ async def _send_morning_affirmations():
 
                         gender = user.gender or "male"
                         ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender)
-                        image_url = await generate_image_with_face(
+                        img_result = await generate_image_with_face(
                             ai_data['prompt'], ai_data['affirmation'], photos, gender)
+                        img_bytes = (await _fetch_bytes(img_result)
+                                     if isinstance(img_result, str) else img_result.image_bytes)
+
+                        # Сохраняем сгенерированную картинку для истории в админке
+                        from bot.services.gen_store import save_generated
+                        img_path = save_generated(user.telegram_id, img_bytes)
 
                         # КРИТИЧЕСКОЕ ТРЕБОВАНИЕ ПРОДУКТА: пустой caption
-                        await bot.send_photo(chat_id=user.telegram_id, photo=image_url, caption="")
+                        await bot.send_photo(chat_id=user.telegram_id,
+                                             photo=img_bytes, caption="")
 
                         # Фиксируем время последней генерации (для кулдауна тестовой)
                         user.last_generation_at = datetime.utcnow()
                         await session.commit()
-                        await record_delivery(user.telegram_id, "daily", goal.goal_text)
+                        await record_delivery(user.telegram_id, "daily", goal.goal_text,
+                                              image_path=img_path)
                 except Exception as e:
                     print(f"Error processing user {user.telegram_id}: {e}")
                     try:

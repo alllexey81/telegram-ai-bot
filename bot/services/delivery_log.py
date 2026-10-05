@@ -5,7 +5,7 @@ from bot.database.models import DeliveryLog
 
 
 async def record_delivery(user_id: int, source: str, goal_text: str | None = None,
-                          success: bool = True, error: object = None):
+                          success: bool = True, error: object = None, image_path: str | None = None):
     """Записывает факт отправки (или ошибки) в delivery_log.
     Использует свой движок на вызов - безопасно и из бота, и из Celery, и из админ-веба."""
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
@@ -18,7 +18,8 @@ async def record_delivery(user_id: int, source: str, goal_text: str | None = Non
                 source=source,
                 goal_text=(goal_text or "")[:500],
                 success=1 if success else 0,
-                error=(str(error) or None)[:500],
+                error=(str(error) or None)[:500] if error else None,
+                image_path=image_path,
             ))
             await session.commit()
     finally:

@@ -315,28 +315,28 @@ async def process_timezone(message: Message, state: FSMContext):
                 ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male")
                 result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male")
 
-                # ТЗ: caption должен быть пустым
-                from aiogram.types import BufferedInputFile
-
+                from bot.services.gen_store import save_generated
                 if isinstance(result, str):
                     import aiohttp
                     async with aiohttp.ClientSession() as http_session:
                         async with http_session.get(result) as resp:
-                            if resp.status == 200:
-                                image_bytes = await resp.read()
-                                await message.answer_photo(
-                                    photo=BufferedInputFile(image_bytes, filename="affirmation.png"), caption="")
-                            else:
-                                await message.answer(f"Не удалось скачать сгенерированную картинку (HTTP {resp.status}).")
+                            if resp.status != 200:
+                                raise RuntimeError(f"HTTP {resp.status} при скачивании картинки")
+                            image_bytes = await resp.read()
                 else:
-                    await message.answer_photo(
-                        photo=BufferedInputFile(result.image_bytes, filename="affirmation.png"), caption="")
+                    image_bytes = result.image_bytes
+                img_path = save_generated(message.from_user.id, image_bytes)
+
+                # ТЗ: caption должен быть пустым
+                from aiogram.types import BufferedInputFile
+                await message.answer_photo(
+                    photo=BufferedInputFile(image_bytes, filename="affirmation.png"), caption="")
                 # Фиксируем время последней генерации (для кулдауна)
                 async with async_session() as s:
                     u = await get_user(s, message.from_user.id)
                     u.last_generation_at = datetime.utcnow()
                     await s.commit()
-                await record_delivery(message.from_user.id, "test", goal.goal_text)
+                await record_delivery(message.from_user.id, "test", goal.goal_text, image_path=img_path)
             except Exception as e:
                 await message.answer(f"Произошла ошибка при генерации тестовой картинки: {e}")
                 try:
