@@ -157,8 +157,8 @@ def user_card(u, logs) -> str:
   </div>
   <div class="editrow">
    <input type="text" id="ex{u.telegram_id}" value="{html.escape(u.prompt_extra or '')}"
-     style="flex:1" placeholder="Особые требования к промпту (напр.: без детей, только мужчины на фото, без женщин)">
-   <button onclick="saveExtra({u.telegram_id}, this)">💾 Сохранить требования</button>
+     style="flex:1" placeholder="Особые пожелания и ограничения к каждому фото (напр.: надпись с именем Ваня, летают голуби, без детей, только мужская компания)">
+   <button onclick="saveExtra({u.telegram_id}, this)">💾 Сохранить пожелания</button>
   </div>
   <textarea id="gl{u.telegram_id}" placeholder="По одной цели на строку">{html.escape(goals_text)}</textarea>
   <div class="editrow"><button onclick="saveGoals({u.telegram_id}, this)">💾 Сохранить цели</button></div>
@@ -276,7 +276,7 @@ async function saveExtra(id, btn) {{
     headers: {{ 'Content-Type': 'application/json' }},
     body: JSON.stringify({{ id, extra: document.getElementById('ex' + id).value }}) }});
   const j = await r.json();
-  st(id).textContent = j.ok ? '✅ требования сохранены' : '❌ ' + (j.error || 'ошибка');
+  st(id).textContent = j.ok ? '✅ пожелания сохранены' : '❌ ' + (j.error || 'ошибка');
   btn.disabled = false;
 }}
 async function saveGoals(id, btn) {{
