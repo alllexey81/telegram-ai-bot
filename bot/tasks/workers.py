@@ -59,6 +59,7 @@ async def _send_morning_affirmations():
                         ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender, user.prompt_extra)
                         img_result = await generate_image_with_face(
                             ai_data['prompt'], ai_data['affirmation'], photos, gender, user.prompt_extra)
+                        scene_text = getattr(img_result, "scene_text", None)
                         img_bytes = (await _fetch_bytes(img_result)
                                      if isinstance(img_result, str) else img_result.image_bytes)
 
@@ -74,7 +75,7 @@ async def _send_morning_affirmations():
                         user.last_generation_at = datetime.utcnow()
                         await session.commit()
                         await record_delivery(user.telegram_id, "daily", goal.goal_text,
-                                              image_path=img_path)
+                                              image_path=img_path, prompt_text=scene_text)
                 except Exception as e:
                     print(f"Error processing user {user.telegram_id}: {e}")
                     try:

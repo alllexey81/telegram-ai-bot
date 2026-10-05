@@ -85,6 +85,9 @@ button.ghost {{ background:#232838; }} button.ghost:hover {{ background:#2e3448;
 .logtbl th, .logtbl td {{ border:1px solid #2a2f3a; padding:5px 8px; text-align:left; vertical-align:middle; }}
 .logtbl th {{ background:#1d2230; color:#9aa4bd; }}
 .logtbl img {{ width:70px; height:70px; object-fit:cover; border-radius:6px; }}
+.promptcell {{ max-width:260px; font-size:11px; color:#9aa4bd; white-space:pre-wrap; word-break:break-word;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }}
+.promptcell:hover {{ -webkit-line-clamp:unset; color:#e6e6e6; }}
 details summary {{ cursor:pointer; color:#8fa8ff; font-size:13px; margin-top:6px; }}
 .status {{ font-size:13px; color:#7dd97d; min-height:18px; margin-top:6px; }}
 input[type=password] {{ background:#171a21; color:#e6e6e6; border:1px solid #2a2f3a; border-radius:8px; padding:10px; width:260px; }}
@@ -121,15 +124,17 @@ def user_card(u, logs) -> str:
     log_rows = ""
     for l in logs:
         img_cell = f'<img src="/genphoto/{html.escape(l.image_path)}">' if l.image_path else ""
+        prompt_cell = f'<div class="promptcell" title="Полный промпт">{html.escape(l.prompt_text)}</div>' if l.prompt_text else ""
         log_rows += (
             f"<tr><td>{fmt_dt(l.sent_at, u.timezone)}</td>"
             f"<td>{'✅' if l.success else '❌'}</td>"
             f"<td>{html.escape(l.source)}</td>"
             f"<td>{html.escape(l.goal_text or '')}</td>"
             f"<td>{img_cell}</td>"
+            f"<td>{prompt_cell}</td>"
             f"<td>{html.escape(l.error or '')}</td></tr>")
     if not log_rows:
-        log_rows = '<tr><td colspan="6"><i>нет отправок</i></td></tr>'
+        log_rows = '<tr><td colspan="7"><i>нет отправок</i></td></tr>'
 
     return f"""
 <div class="card">
@@ -166,7 +171,7 @@ def user_card(u, logs) -> str:
 
  <button onclick="sendNow({u.telegram_id}, this)">⚡ Отправить сейчас</button>
  <div class="status" id="st{u.telegram_id}"></div>
- <table class="logtbl"><tr><th>Время ({u.timezone or 'UTC'})</th><th></th><th>Источник</th><th>Цель</th><th>Картинка</th><th>Ошибка</th></tr>{log_rows}</table>
+ <table class="logtbl"><tr><th>Время ({u.timezone or 'UTC'})</th><th></th><th>Источник</th><th>Цель</th><th>Картинка</th><th>Промпт</th><th>Ошибка</th></tr>{log_rows}</table>
 </div>"""
 
 
@@ -338,6 +343,7 @@ async def _send_to_users(ids):
                 gender = u.gender or "male"
                 ai = await generate_prompt_and_affirmation(goal.goal_text, gender, u.prompt_extra)
                 result = await generate_image_with_face(ai['prompt'], ai['affirmation'], photos, gender, u.prompt_extra)
+                scene_text = getattr(result, "scene_text", None)
                 if isinstance(result, str):
                     import aiohttp as ah
                     async with ah.ClientSession() as hs:
@@ -353,7 +359,8 @@ async def _send_to_users(ids):
                     uu = await s2.get(User, u.telegram_id)
                     uu.last_generation_at = datetime.datetime.utcnow()
                     await s2.commit()
-                await record_delivery(u.telegram_id, "manual", goal.goal_text, image_path=img_path)
+                await record_delivery(u.telegram_id, "manual", goal.goal_text, image_path=img_path,
+                                      prompt_text=scene_text)
             except Exception as e:
                 try:
                     await record_delivery(u.telegram_id, "manual", None, success=False, error=e)

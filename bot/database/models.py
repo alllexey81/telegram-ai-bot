@@ -71,3 +71,5 @@ class DeliveryLog(Base):
     error = Column(String, nullable=True)
     # Путь к сгенерированной картинке (относительно /app/photos) для просмотра в админке
     image_path = Column(String, nullable=True)
+    # Финальный промпт, по которому рисовалась картинка
+    prompt_text = Column(String, nullable=True)

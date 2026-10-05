@@ -314,6 +314,7 @@ async def process_timezone(message: Message, state: FSMContext):
 
                 ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male", user.prompt_extra)
                 result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male", user.prompt_extra)
+                scene_text = getattr(result, "scene_text", None)
 
                 from bot.services.gen_store import save_generated
                 if isinstance(result, str):
@@ -336,7 +337,8 @@ async def process_timezone(message: Message, state: FSMContext):
                     u = await get_user(s, message.from_user.id)
                     u.last_generation_at = datetime.utcnow()
                     await s.commit()
-                await record_delivery(message.from_user.id, "test", goal.goal_text, image_path=img_path)
+                await record_delivery(message.from_user.id, "test", goal.goal_text, image_path=img_path,
+                                      prompt_text=scene_text)
             except Exception as e:
                 await message.answer(f"Произошла ошибка при генерации тестовой картинки: {e}")
                 try:

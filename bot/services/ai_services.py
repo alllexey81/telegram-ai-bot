@@ -209,7 +209,9 @@ async def generate_image_with_face(prompt: str, affirmation: str, user_photos: l
     try:
         b64img = data['data'][0]['b64_json']
         image_bytes = base64.b64decode(b64img)
-        return ImageBytesResult(image_bytes, data['data'][0].get('media_type', 'image/png'))
+        result = ImageBytesResult(image_bytes, data['data'][0].get('media_type', 'image/png'))
+        result.scene_text = scene  # финальный промпт для лога в админке
+        return result
     except Exception as e:
         print(f"Failed to parse image response: {e}; raw={str(data)[:500]}")
         return await _image_fallback(affirmation)
@@ -223,6 +225,7 @@ async def _image_fallback(affirmation: str) -> str:
 class ImageBytesResult:
     """Обёртка, позволяющая единообразно возвращать либо байты изображения,
     либо строку URL (фолбэк) из функции generate_image_with_face."""
-    def __init__(self, image_bytes: bytes, media_type: str = "image/png") -> None:
+    def __init__(self, image_bytes: bytes, media_type: str = "image/png", scene_text: str | None = None) -> None:
         self.image_bytes = image_bytes
         self.media_type = media_type
+        self.scene_text = scene_text
