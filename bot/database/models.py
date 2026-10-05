@@ -48,10 +48,22 @@ class Goal(Base):
 class PromoCode(Base):
     """Одноразовый промокод: активирует подписку на days дней первому использовавшему."""
     __tablename__ = 'promo_codes'
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String, unique=True, nullable=False)
     days = Column(Integer, nullable=False, default=30)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     used_by = Column(BigInteger, nullable=True)
     used_at = Column(DateTime, nullable=True)
+
+
+class DeliveryLog(Base):
+    """Лог всех отправок картинок: рассылка, тестовая генерация, ручная отправка из админки."""
+    __tablename__ = 'delivery_log'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey('users.telegram_id'), nullable=False)
+    sent_at = Column(DateTime, default=datetime.datetime.utcnow)
+    source = Column(String, nullable=False, default="daily")  # daily / test / manual
+    goal_text = Column(String, nullable=True)
+    success = Column(Integer, nullable=False, default=1)  # 1 успех, 0 ошибка
+    error = Column(String, nullable=True)

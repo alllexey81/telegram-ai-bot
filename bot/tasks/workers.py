@@ -5,6 +5,7 @@ from bot.tasks.celery_app import celery
 from bot.config import settings
 from bot.database.models import User, SubStatus
 from bot.services.ai_services import generate_prompt_and_affirmation, generate_image_with_face
+from bot.services.delivery_log import record_delivery
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -58,8 +59,13 @@ async def _send_morning_affirmations():
                         # Фиксируем время последней генерации (для кулдауна тестовой)
                         user.last_generation_at = datetime.utcnow()
                         await session.commit()
+                        await record_delivery(user.telegram_id, "daily", goal.goal_text)
                 except Exception as e:
                     print(f"Error processing user {user.telegram_id}: {e}")
+                    try:
+                        await record_delivery(user.telegram_id, "daily", None, success=False, error=e)
+                    except Exception:
+                        pass
     finally:
         await engine.dispose()
 

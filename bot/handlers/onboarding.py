@@ -13,6 +13,7 @@ from bot.database.models import SubStatus, Photo, Goal
 from bot.services.s3_service import upload_photo
 from bot.config import settings
 from bot.services.ai_services import generate_prompt_and_affirmation, generate_image_with_face
+from bot.services.delivery_log import record_delivery
 
 router = Router()
 
@@ -335,8 +336,13 @@ async def process_timezone(message: Message, state: FSMContext):
                     u = await get_user(s, message.from_user.id)
                     u.last_generation_at = datetime.utcnow()
                     await s.commit()
+                await record_delivery(message.from_user.id, "test", goal.goal_text)
             except Exception as e:
                 await message.answer(f"Произошла ошибка при генерации тестовой картинки: {e}")
+                try:
+                    await record_delivery(message.from_user.id, "test", None, success=False, error=e)
+                except Exception:
+                    pass
         else:
             await message.answer("Не удалось найти фото или цели для генерации.")
 

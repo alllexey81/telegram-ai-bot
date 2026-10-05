@@ -24,6 +24,18 @@ services:
     ports:
       - "8000:8000"
 
+  admin_web:
+    build: .
+    command: python admin_web.py
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+
   celery_worker:
     build: .
     command: celery -A bot.tasks.celery_app worker --loglevel=info
