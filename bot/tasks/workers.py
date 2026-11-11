@@ -52,6 +52,14 @@ async def _send_morning_affirmations():
                         if not user.goals:
                             continue
 
+                        # Периодичность: раз в interval_days дней.
+                        # Отправляем, если с последней успешной генерации прошло не меньше N суток.
+                        interval = user.interval_days or 1
+                        if interval > 1:
+                            last = user.last_generation_at
+                            if last and (now_utc - last).days < interval:
+                                continue
+
                         goal = random.choice(user.goals)
                         photos = [p.s3_url for p in user.photos]
 

@@ -23,6 +23,8 @@ class User(Base):
     gender = Column(String, nullable=True)
     # Индивидуальные требования пользователя к промпту (напр. "без детей", "только мужчины")
     prompt_extra = Column(String, nullable=True)
+    # Периодичность доставки: раз в N дней (1 = каждый день)
+    interval_days = Column(Integer, nullable=False, default=1)
     last_generation_at = Column(DateTime, nullable=True)
 
     photos = relationship("Photo", back_populates="user", cascade="all, delete-orphan")

@@ -141,6 +141,10 @@ button:focus-visible, .chip:focus-visible {{ outline:2px solid var(--accent); ou
 .thumbwrap .del svg {{ width:11px; height:11px; }}
 .uploadbtn {{ border-style:dashed; color:var(--fg-muted); height:80px; width:110px; justify-content:center; }}
 .actions {{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }}
+.goals-preview {{ display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 10px; }}
+.gchip {{ background:var(--muted); border:1px solid var(--border); border-radius:999px;
+  padding:3px 12px; font-size:12.5px; color:#c6cddb; }}
+.gchip.more {{ color:var(--accent); border-color:var(--accent); }}
 
 .logtbl {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }}
 .logtbl th, .logtbl td {{ border-bottom:1px solid var(--muted); padding:7px 8px; text-align:left; vertical-align:top; }}
@@ -214,6 +218,19 @@ def user_card(u, logs) -> str:
         f'<option value="{tz}"{" selected" if tz == u.timezone else ""}>{tz}</option>'
         for tz in TIMEZONES)
     delivery_val = u.delivery_time.strftime("%H:%M") if u.delivery_time else ""
+    interval = u.interval_days or 1
+    freq_opts = "".join(
+        f'<option value="{d}"{" selected" if d == interval else ""}>{("каждый день" if d == 1 else f"раз в {d} дн.")}</option>'
+        for d in (1, 2, 3, 5, 7, 14, 30))
+    interval_label = "каждый день" if interval == 1 else f"раз в {interval} дн."
+    goal_items = [g.goal_text for g in u.goals]
+    if goal_items:
+        goals_preview = "".join(
+            f'<span class="gchip">{html.escape(g)}</span>' for g in goal_items[:3])
+        if len(goal_items) > 3:
+            goals_preview += f'<span class="gchip more">+{len(goal_items) - 3}</span>'
+    else:
+        goals_preview = '<span class="empty">целей пока нет</span>'
 
     log_rows = ""
     for l in logs:
@@ -239,11 +256,13 @@ def user_card(u, logs) -> str:
   <span class="badge">{u.gender or 'пол не указан'}</span>
  </div>
  <div class="meta">
-  <span>{icon('clock')} доставка <b>{u.delivery_time or '—'}</b></span>
+  <span>{icon('clock')} <b>{u.delivery_time or '—'}</b></span>
+  <span>{interval_label}</span>
   <span>{u.timezone or 'ТЗ не указана'}</span>
-  <span>подписка до <b>{fmt_dt(u.subscription_end_date)}</b></span>
-  <span>генерация: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
+  <span>до <b>{fmt_dt(u.subscription_end_date)}</b></span>
+  <span>ген.: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
  </div>
+ <div class="goals-preview">{goals_preview}</div>
  <div class="thumbs">
   {thumbs or '<span class="empty">нет фото</span>'}
   <input type="file" id="up{u.telegram_id}" multiple accept="image/*" style="display:none"
@@ -268,6 +287,8 @@ def user_card(u, logs) -> str:
    <select id="tz{u.telegram_id}" style="width:100%">{tz_opts}</select></div>
   <div class="field"><label>Время доставки (HH:MM)</label>
    <input type="time" id="dt{u.telegram_id}" value="{delivery_val}" style="width:100%"></div>
+  <div class="field"><label>Периодичность</label>
+   <select id="iv{u.telegram_id}" style="width:100%">{freq_opts}</select></div>
   <div class="field"><label>Особые пожелания и ограничения к каждому фото (напр.: надпись с именем Ваня, летают голуби, без детей, только мужская компания)</label>
    <input type="text" id="ex{u.telegram_id}" value="{html.escape(u.prompt_extra or '')}" style="width:100%"></div>
   <div class="field"><label>Цели — по одной на строку</label>
@@ -407,7 +428,8 @@ async function uploadPhotos(id, input) {{
 async function saveAll(id, btn) {{
   btn.disabled = true;
   const body = {{ id, timezone: $('tz' + id).value, delivery_time: $('dt' + id).value,
-                 extra: $('ex' + id).value, goals: $('gl' + id).value }};
+                 extra: $('ex' + id).value, goals: $('gl' + id).value,
+                 interval_days: parseInt($('iv' + id).value) || 1 }};
   const r = await fetch('/api/save_all', {{ method: 'POST',
     headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify(body) }});
   const j = await r.json();
@@ -538,6 +560,10 @@ async def api_save_all(request):
             if dt:
                 u.delivery_time = datetime.datetime.strptime(dt, "%H:%M").time()
             u.prompt_extra = (data.get("extra") or "").strip() or None
+            try:
+                u.interval_days = max(1, int(data.get("interval_days") or 1))
+            except (TypeError, ValueError):
+                u.interval_days = 1
             goals = [g.strip() for g in (data.get("goals") or "").splitlines()
                      if g.strip() and len(g.strip()) > 2][:10]
             await session.execute(delete(Goal).where(Goal.user_id == uid))
