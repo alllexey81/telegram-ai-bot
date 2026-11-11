@@ -149,10 +149,29 @@ async def generate_image_with_face(prompt: str, affirmation: str, user_photos: l
     }
 
     input_references = []
+    ref_roles = []
     for photo in user_photos:
-        ref_url = await _to_ref_url(photo)
-        if ref_url:
-            input_references.append({"type": "image_url", "image_url": {"url": ref_url}})
+        # photo = (category, url); если передан просто URL - это фото героя
+        category, photo_url = photo if isinstance(photo, tuple) else ("me", photo)
+        ref_url = await _to_ref_url(photo_url)
+        if not ref_url:
+            continue
+        idx = len(input_references) + 1
+        input_references.append({"type": "image_url", "image_url": {"url": ref_url}})
+        if category == "partner":
+            ref_roles.append(
+                f"Reference {idx} is the user's REAL PARTNER - the actual person shown in that photo. "
+                "If the scene includes a partner, depict exactly this person with preserved appearance. "
+                "It is NOT the user - never merge the partner's face with the hero's face.")
+        elif category.startswith("wish"):
+            n = category.replace("wish", "") or "?"
+            ref_roles.append(
+                f"Reference {idx} is DESIRED OBJECT #{n} - a specific thing the user wants "
+                "(e.g. an exact car, house, place or another cherished item/person). "
+                "If the goal or scene mentions such an object, depict exactly this reference object, "
+                "not a generic one.")
+        else:
+            ref_roles.append(f"Reference {idx} is the HERO - the user themselves.")
 
     style_desc, style_face_rule = get_daily_style()
     # Промпт картинки: пожелания перекрывают композиционные дефолты, лицо героя - незыблемо
@@ -179,9 +198,15 @@ async def generate_image_with_face(prompt: str, affirmation: str, user_photos: l
         extra_rule = (
             f" ADDITIONAL MANDATORY REQUIREMENTS (strictly follow): {extra.strip()}."
         )
+    refs_rule = ""
+    if ref_roles:
+        refs_rule = "REFERENCE PHOTOS ROLES (assign each reference its role exactly, do not mix them up): " \
+                    + " ".join(ref_roles) + " "
+
     scene = (
         f"Render this scene as a {style_desc}: {style_face_rule}. "
         f"{prompt}. "
+        f"{refs_rule}"
         f"{identity_rule} "
         f"{extra_rule}"
         f"Bold elegant typography is rendered prominently on the image with this EXACT Russian text in Cyrillic script: "

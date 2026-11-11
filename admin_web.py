@@ -145,6 +145,11 @@ button:focus-visible, .chip:focus-visible {{ outline:2px solid var(--accent); ou
 .gchip {{ background:var(--muted); border:1px solid var(--border); border-radius:999px;
   padding:3px 12px; font-size:12.5px; color:#c6cddb; }}
 .gchip.more {{ color:var(--accent); border-color:var(--accent); }}
+.catgroup {{ margin-right:14px; }}
+.catlabel {{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--fg-muted); margin-bottom:5px; }}
+.catgroup-thumbs {{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }}
+.catgroup .uploadbtn {{ height:64px; width:86px; font-size:11px; }}
+.catgroup .thumbwrap img {{ width:64px; height:64px; }}
 
 .logtbl {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }}
 .logtbl th, .logtbl td {{ border-bottom:1px solid var(--muted); padding:7px 8px; text-align:left; vertical-align:top; }}
@@ -209,10 +214,21 @@ async def login_handler(request):
 
 
 def user_card(u, logs) -> str:
-    thumbs = "".join(
-        f'<span class="thumbwrap"><img loading="lazy" src="/photo/{html.escape(p.s3_url.split("/")[-1])}" alt="референс">'
-        f'<button class="del" title="Удалить фото" onclick="delPhoto({u.telegram_id}, {p.id}, this)">{icon("trash")}</button></span>'
-        for p in u.photos)
+    CATS = [("me", "Я"), ("partner", "Партнёр"), ("wish1", "Желание 1"),
+            ("wish2", "Желание 2"), ("wish3", "Желание 3")]
+    thumbs = ""
+    for cat_key, cat_label in CATS:
+        cat_thumbs = "".join(
+            f'<span class="thumbwrap"><img loading="lazy" src="/photo/{html.escape(p.s3_url.split("/")[-1])}" alt="референс {cat_label}">'
+            f'<button class="del" title="Удалить фото" onclick="delPhoto({u.telegram_id}, {p.id}, this)">{icon("trash")}</button></span>'
+            for p in u.photos if (p.category or "me") == cat_key)
+        uid = str(u.telegram_id)
+        up_input = ('<input type="file" id="up' + uid + '_' + cat_key + '" multiple accept="image/*" style="display:none" onchange="uploadPhotos(' + uid + ', \'' + cat_key + '\', this)">')
+        up_btn = ('<button class="uploadbtn" onclick="document.getElementById(\'up' + uid + '_' + cat_key + '\').click()">' + icon('upload') + ' Загрузить</button>')
+        empty_ph = "<span class='empty'>—</span>"
+        thumbs += ('<div class="catgroup"><div class="catlabel">' + cat_label + '</div>'
+            + '<span class="catgroup-thumbs">' + (cat_thumbs or empty_ph)
+            + up_input + up_btn + '</span></div>')
     goals_text = "\n".join(g.goal_text for g in u.goals)
     tz_opts = "".join(
         f'<option value="{tz}"{" selected" if tz == u.timezone else ""}>{tz}</option>'
@@ -263,12 +279,7 @@ def user_card(u, logs) -> str:
   <span>ген.: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
  </div>
  <div class="goals-preview">{goals_preview}</div>
- <div class="thumbs">
-  {thumbs or '<span class="empty">нет фото</span>'}
-  <input type="file" id="up{u.telegram_id}" multiple accept="image/*" style="display:none"
-    onchange="uploadPhotos({u.telegram_id}, this)">
-  <button class="uploadbtn" onclick="document.getElementById('up{u.telegram_id}').click()">{icon('upload')} Загрузить</button>
- </div>
+ <div class="thumbs">{thumbs}</div>
  <div class="actions">
   <button class="primary" onclick="sendNow({u.telegram_id}, this)">{icon('send')} Отправить сейчас</button>
   <button class="grant" onclick="grant({u.telegram_id}, 30, this)">{icon('plus30')} +30 дн.</button>
@@ -415,12 +426,12 @@ async function delPhoto(id, photoId, btn) {{
   if (j.ok) {{ btn.closest('.thumbwrap').remove(); toast('Фото удалено'); }}
   else toast('❌ ' + j.error, true);
 }}
-async function uploadPhotos(id, input) {{
+async function uploadPhotos(id, cat, input) {{
   if (!input.files.length) return;
   const fd = new FormData();
   for (const f of input.files) fd.append('files', f);
   toast('⏳ загрузка ' + input.files.length + ' фото...');
-  const r = await fetch('/api/upload?id=' + id, {{ method: 'POST', body: fd }}); const j = await r.json();
+  const r = await fetch('/api/upload?id=' + id + '&cat=' + cat, {{ method: 'POST', body: fd }}); const j = await r.json();
   if (j.ok) {{ toast('✅ загружено: ' + j.added); setTimeout(() => location.reload(), 1000); }}
   else toast('❌ ' + j.error, true);
   input.value = '';
@@ -483,7 +494,7 @@ async def _send_to_users(ids):
         for u in users:
             try:
                 goal = secrets.choice(list(u.goals))
-                photos = [p.s3_url for p in u.photos]
+                photos = [(p.category or "me", p.s3_url) for p in u.photos]
                 gender = u.gender or "male"
                 ai = await generate_prompt_and_affirmation(goal.goal_text, gender, u.prompt_extra)
                 result = await generate_image_with_face(ai['prompt'], ai['affirmation'], photos, gender, u.prompt_extra)
@@ -581,6 +592,9 @@ async def api_upload(request):
     if not check_login(request):
         return web.json_response({"ok": False, "error": "unauthorized"})
     uid = int(request.rel_url.query["id"])
+    cat = request.rel_url.query.get("cat", "me")
+    if cat not in ("me", "partner", "wish1", "wish2", "wish3"):
+        cat = "me"
     reader = await request.multipart()
     added = 0
     engine, S = task_engine()
@@ -594,7 +608,7 @@ async def api_upload(request):
             name = f"{uuid.uuid4().hex}.jpg"
             (PHOTOS_DIR / name).write_bytes(data)
             async with S() as session:
-                session.add(Photo(user_id=uid, s3_url=f"http://host.docker.internal:8000/{name}"))
+                session.add(Photo(user_id=uid, s3_url=f"http://host.docker.internal:8000/{name}", category=cat))
                 await session.commit()
             added += 1
         return web.json_response({"ok": True, "added": added})

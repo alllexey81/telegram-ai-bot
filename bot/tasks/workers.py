@@ -61,7 +61,7 @@ async def _send_morning_affirmations():
                                 continue
 
                         goal = random.choice(user.goals)
-                        photos = [p.s3_url for p in user.photos]
+                        photos = [(p.category or "me", p.s3_url) for p in user.photos]
 
                         gender = user.gender or "male"
                         ai_data = await generate_prompt_and_affirmation(goal.goal_text, gender, user.prompt_extra)

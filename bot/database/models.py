@@ -32,10 +32,12 @@ class User(Base):
 
 class Photo(Base):
     __tablename__ = 'photos'
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey('users.telegram_id'))
     s3_url = Column(String, nullable=False)
+    # Категория референса: me (герой) / partner (партнёр) / wish1..3 (объекты желания)
+    category = Column(String, nullable=False, default="me")
 
     user = relationship("User", back_populates="photos")
 

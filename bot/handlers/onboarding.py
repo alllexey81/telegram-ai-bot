@@ -310,7 +310,7 @@ async def process_timezone(message: Message, state: FSMContext):
                 return
             try:
                 goal = random.choice(goals)
-                photo_urls = [p.s3_url for p in photos]
+                photo_urls = [(p.category or "me", p.s3_url) for p in photos]
 
                 ai_data = await generate_prompt_and_affirmation(goal.goal_text, user.gender or "male", user.prompt_extra)
                 result = await generate_image_with_face(ai_data['prompt'], ai_data['affirmation'], photo_urls, user.gender or "male", user.prompt_extra)
