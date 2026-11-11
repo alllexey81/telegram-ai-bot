@@ -1,5 +1,5 @@
 """Админ-веб панель «Фото будущего»: подписчики, фото, цели, лог отправок с картинками,
-ручная отправка, редактирование профиля (фото/таймзона/цели), выдача доступа."""
+ручная отправка, редактирование профиля (фото/таймзона/цели/пожелания), выдача доступа."""
 import asyncio
 import datetime
 import html
@@ -52,50 +52,139 @@ def fmt_dt(dt, tz_name=None):
     return dt.strftime("%d.%m %H:%M UTC")
 
 
+def icon(name: str) -> str:
+    I = {
+        "send": '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+        "plus30": '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+        "plus90": '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 13h8"/><path d="M12 9v8"/>',
+        "edit": '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+        "trash": '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+        "upload": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+        "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+        "chevron": '<path d="m6 9 6 6 6-6"/>',
+        "camera": '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+        "clock": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    }
+    return (f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+            f'stroke-linecap="round" stroke-linejoin="round">{I.get(name, "")}</svg>')
+
+
 def page(body: str) -> str:
-    return f"""<!doctype html><html><head><meta charset="utf-8">
+    return f"""<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <title>Фото будущего — админ</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-:root {{ color-scheme: dark; }}
-body {{ background:#0f1115; color:#e6e6e6; font-family:'Segoe UI',Arial,sans-serif; margin:0; padding:24px; }}
-h1 {{ font-size:22px; margin:0 0 6px; }} .sub {{ color:#8b93a7; margin-bottom:20px; font-size:13px; }}
-.card {{ background:#171a21; border:1px solid #2a2f3a; border-radius:12px; padding:16px; margin-bottom:16px; }}
+:root {{
+  color-scheme: dark;
+  --bg:#0F172A; --card:#1B2336; --muted:#272F42; --border:#475569;
+  --fg:#F8FAFC; --fg-muted:#94A3B8; --accent:#22C55E; --on-accent:#0F172A;
+  --primary:#1E293B; --danger:#EF4444; --warn:#EAB308;
+}}
+* {{ box-sizing:border-box; }}
+body {{ background:var(--bg); color:var(--fg); font-family:'Fira Sans',sans-serif; font-size:16px; line-height:1.5; margin:0; padding:0 24px 40px; }}
+h1 {{ font-size:22px; font-weight:600; margin:0; }}
+svg {{ width:16px; height:16px; flex-shrink:0; }}
+
+.topbar {{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:20px 0 14px; }}
+.topbar .spacer {{ flex:1; }}
+
+.stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:14px; }}
+.stat {{ background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:10px 14px; }}
+.stat .n {{ font-family:'Fira Code',monospace; font-size:22px; font-weight:600; }}
+.stat .l {{ color:var(--fg-muted); font-size:12px; }}
+.stat.warn .n {{ color:var(--warn); }} .stat.bad .n {{ color:var(--danger); }} .stat.ok .n {{ color:var(--accent); }}
+
+.filters {{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:16px; position:sticky; top:0;
+  background:rgba(15,23,42,.9); backdrop-filter:blur(12px); padding:10px 0; z-index:10; }}
+.search {{ position:relative; }}
+.search svg {{ position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--fg-muted); }}
+input[type=text], input[type=time], select, textarea {{ background:var(--card); color:var(--fg);
+  border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; font-family:inherit; }}
+.search input {{ padding-left:34px; width:240px; }}
+.search input:focus, select:focus, textarea:focus, input[type=time]:focus {{ outline:2px solid var(--accent); outline-offset:1px; }}
+.chip {{ background:var(--muted); border:1px solid var(--border); color:var(--fg-muted); border-radius:999px;
+  padding:6px 14px; font-size:13px; cursor:pointer; user-select:none; }}
+.chip.on {{ background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:500; }}
+
+button {{ background:var(--primary); color:var(--fg); border:1px solid var(--border); border-radius:8px;
+  padding:8px 14px; font-size:13px; font-family:inherit; cursor:pointer; display:inline-flex; gap:6px; align-items:center;
+  transition:background .15s; }}
+button:hover {{ background:var(--muted); }}
+button.primary {{ background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:500; }}
+button.primary:hover {{ background:#1eb852; }}
+button.danger {{ background:transparent; color:var(--danger); border-color:var(--danger); }}
+button.danger:hover {{ background:rgba(239,68,68,.15); }}
+button:disabled {{ opacity:.5; cursor:wait; }}
+button:focus-visible, .chip:focus-visible {{ outline:2px solid var(--accent); outline-offset:2px; }}
+
+.card {{ background:var(--card); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:16px 18px; margin-bottom:14px; }}
+.card.flash {{ border-color:var(--accent); }}
 .uhead {{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }}
-.uhead b {{ font-size:16px; }} .uid {{ color:#8b93a7; font-size:12px; }}
-.badge {{ background:#232838; border-radius:6px; padding:2px 8px; font-size:12px; }}
-.badge.ok {{ color:#7dd97d; }} .badge.trial {{ color:#f2c94c; }} .badge.expired {{ color:#ff7d7d; }}
-.meta {{ color:#aab2c5; font-size:13px; margin:8px 0; line-height:1.5; }}
-.thumbs {{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }}
+.uhead b {{ font-size:16px; font-weight:600; }}
+.uid {{ color:var(--fg-muted); font-size:12px; font-family:'Fira Code',monospace; }}
+.badge {{ background:var(--muted); border-radius:6px; padding:2px 10px; font-size:12px; }}
+.badge.active {{ background:rgba(34,197,94,.18); color:var(--accent); }}
+.badge.trial {{ background:rgba(234,179,8,.18); color:var(--warn); }}
+.badge.expired {{ background:rgba(239,68,68,.18); color:var(--danger); }}
+.meta {{ color:var(--fg-muted); font-size:13px; margin:8px 0; display:flex; gap:6px 18px; flex-wrap:wrap; }}
+.meta svg {{ width:14px; height:14px; vertical-align:-2px; }}
+.meta b {{ color:var(--fg); font-weight:500; }}
+
+.thumbs {{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; align-items:center; }}
 .thumbwrap {{ position:relative; }}
-.thumbwrap img {{ width:92px; height:92px; object-fit:cover; border-radius:8px; border:1px solid #2a2f3a; cursor:pointer; }}
-.thumbwrap img:hover {{ border-color:#5b8cff; }}
-.thumbwrap .del {{ position:absolute; top:-6px; right:-6px; background:#c0392b; color:#fff; border:0;
-  border-radius:50%; width:20px; height:20px; font-size:11px; line-height:20px; padding:0; cursor:pointer; }}
-.goals {{ font-size:13px; color:#c6cddb; margin:6px 0; }}
-textarea, select, input[type=time], input[type=file] {{ background:#171a21; color:#e6e6e6; border:1px solid #2a2f3a;
-  border-radius:8px; padding:8px; font-size:13px; font-family:inherit; }}
-textarea {{ width:100%; min-height:70px; }}
-.editrow {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0; }}
-button {{ background:#3b6cf5; color:#fff; border:0; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; }}
-button:hover {{ background:#2f57c9; }} button:disabled {{ background:#333; color:#777; cursor:wait; }}
-button.grant {{ background:#2e8b57; }} button.grant:hover {{ background:#257044; }}
-button.ghost {{ background:#232838; }} button.ghost:hover {{ background:#2e3448; }}
-.bulk {{ position:sticky; top:0; background:#0f1115; padding:10px 0; display:flex; gap:10px; align-items:center; z-index:5; }}
-.logtbl {{ width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }}
-.logtbl th, .logtbl td {{ border:1px solid #2a2f3a; padding:5px 8px; text-align:left; vertical-align:middle; }}
-.logtbl th {{ background:#1d2230; color:#9aa4bd; }}
-.logtbl img {{ width:70px; height:70px; object-fit:cover; border-radius:6px; }}
-.promptcell {{ max-width:260px; font-size:11px; color:#9aa4bd; white-space:pre-wrap; word-break:break-word;
+.thumbwrap img {{ width:80px; height:80px; object-fit:cover; border-radius:10px; border:1px solid var(--border); cursor:zoom-in; }}
+.thumbwrap img:hover {{ border-color:var(--accent); }}
+.thumbwrap .del {{ position:absolute; top:-7px; right:-7px; background:var(--danger); color:#fff; border:0;
+  border-radius:50%; width:22px; height:22px; cursor:pointer; display:grid; place-items:center; padding:0; }}
+.thumbwrap .del svg {{ width:11px; height:11px; }}
+.uploadbtn {{ border-style:dashed; color:var(--fg-muted); height:80px; width:110px; justify-content:center; }}
+.actions {{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }}
+
+.logtbl {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }}
+.logtbl th, .logtbl td {{ border-bottom:1px solid var(--muted); padding:7px 8px; text-align:left; vertical-align:top; }}
+.logtbl th {{ color:var(--fg-muted); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:.4px; }}
+.logtbl tr:last-child td {{ border-bottom:0; }}
+.logtbl img {{ width:64px; height:64px; object-fit:cover; border-radius:8px; cursor:zoom-in; }}
+.promptcell {{ max-width:240px; font-size:11px; color:var(--fg-muted); white-space:pre-wrap; word-break:break-word;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }}
-.promptcell:hover {{ -webkit-line-clamp:unset; color:#e6e6e6; }}
-details summary {{ cursor:pointer; color:#8fa8ff; font-size:13px; margin-top:6px; }}
-.status {{ font-size:13px; color:#7dd97d; min-height:18px; margin-top:6px; }}
-input[type=password] {{ background:#171a21; color:#e6e6e6; border:1px solid #2a2f3a; border-radius:8px; padding:10px; width:260px; }}
-input[type=checkbox] {{ width:18px; height:18px; }}
-#lightbox {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:100;
-  cursor:zoom-out; align-items:center; justify-content:center; }}
-#lightbox img {{ max-width:95vw; max-height:95vh; border-radius:8px; }}
-</style></head><body>{body}</body></html>"""
+.promptcell:hover {{ -webkit-line-clamp:unset; color:var(--fg); }}
+.err {{ color:var(--danger); max-width:160px; word-break:break-word; }}
+.empty {{ color:var(--fg-muted); font-style:italic; }}
+
+details summary {{ cursor:pointer; color:var(--fg-muted); font-size:13px; margin-top:8px; list-style:none; display:flex; gap:6px; align-items:center; }}
+details summary:hover {{ color:var(--fg); }}
+details[open] summary {{ color:var(--accent); }}
+
+.modal-bg {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:50; align-items:flex-start; justify-content:center; padding:40px 16px; overflow-y:auto; }}
+.modal {{ background:var(--card); border:1px solid var(--border); border-radius:16px; width:560px; max-width:100%; padding:22px; }}
+.modal h3 {{ margin:0 0 14px; font-size:17px; }}
+.modal .field {{ margin-bottom:14px; }}
+.modal label {{ display:block; font-size:12px; color:var(--fg-muted); margin-bottom:5px; }}
+.modal textarea {{ width:100%; min-height:110px; resize:vertical; }}
+.modal .row {{ display:flex; gap:10px; }}
+.modal .row > * {{ flex:1; }}
+.modal .foot {{ display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }}
+
+#lightbox {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.94); z-index:100; cursor:zoom-out; align-items:center; justify-content:center; }}
+#lightbox img {{ max-width:96vw; max-height:96vh; border-radius:8px; }}
+
+#toasts {{ position:fixed; top:16px; right:16px; z-index:200; display:flex; flex-direction:column; gap:8px; }}
+.toast {{ background:var(--card); border:1px solid var(--border); border-left:3px solid var(--accent);
+  border-radius:10px; padding:10px 16px; font-size:13px; box-shadow:0 8px 30px rgba(0,0,0,.5); animation:tin .2s ease; }}
+.toast.err {{ border-left-color:var(--danger); }}
+@keyframes tin {{ from {{ transform:translateX(30px); opacity:0; }} }}
+@media (prefers-reduced-motion: reduce) {{ * {{ animation:none !important; transition:none !important; }} }}
+
+.login-wrap {{ min-height:90vh; display:flex; align-items:center; justify-content:center; }}
+.login-card {{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px; width:340px; }}
+.login-card input {{ width:100%; }}
+@media (max-width:640px) {{ body {{ padding:0 12px 30px; }} .thumbs img, .thumbwrap img {{ width:64px; height:64px; }} }}
+</style></head><body>{body}
+<div id="lightbox" onclick="this.style.display='none'"><img id="lbimg" alt=""></div>
+<div id="toasts"></div>
+</body></html>"""
 
 
 async def login_handler(request):
@@ -105,73 +194,89 @@ async def login_handler(request):
             resp = web.HTTPFound("/")
             resp.set_cookie(COOKIE, settings.ADMIN_WEB_PASSWORD, max_age=30 * 24 * 3600)
             raise resp
-    body = page("""<div class="card" style="max-width:360px"><h1>🔐 Админ-панель</h1>
-<form method="post"><input type="password" name="password" placeholder="Пароль" autofocus>
-<button style="margin-top:10px">Войти</button></form></div>""")
+    body = page(f"""<div class="login-wrap"><div class="login-card">
+<h1 style="margin-bottom:6px">Фото будущего</h1>
+<p style="color:var(--fg-muted);font-size:13px;margin:0 0 18px">Панель управления</p>
+<form method="post"><label style="display:block;font-size:12px;color:var(--fg-muted);margin-bottom:5px" for="pw">Пароль</label>
+<input type="password" id="pw" name="password" autofocus>
+<button class="primary" style="width:100%;margin-top:14px;justify-content:center">{icon('send')} Войти</button></form>
+</div></div>""")
     return web.Response(text=body, content_type="text/html")
 
 
 def user_card(u, logs) -> str:
     thumbs = "".join(
-        f'<span class="thumbwrap"><img src="/photo/{html.escape(p.s3_url.split("/")[-1])}" title="фото">'
-        f'<button class="del" title="Удалить фото" onclick="delPhoto({u.telegram_id}, {p.id}, this)">✕</button></span>'
+        f'<span class="thumbwrap"><img loading="lazy" src="/photo/{html.escape(p.s3_url.split("/")[-1])}" alt="референс">'
+        f'<button class="del" title="Удалить фото" onclick="delPhoto({u.telegram_id}, {p.id}, this)">{icon("trash")}</button></span>'
         for p in u.photos)
     goals_text = "\n".join(g.goal_text for g in u.goals)
     tz_opts = "".join(
         f'<option value="{tz}"{" selected" if tz == u.timezone else ""}>{tz}</option>'
         for tz in TIMEZONES)
     delivery_val = u.delivery_time.strftime("%H:%M") if u.delivery_time else ""
+
     log_rows = ""
     for l in logs:
-        img_cell = f'<img src="/genphoto/{html.escape(l.image_path)}">' if l.image_path else ""
+        img_cell = f'<img loading="lazy" src="/genphoto/{html.escape(l.image_path)}" alt="генерация">' if l.image_path else ""
         prompt_cell = f'<div class="promptcell" title="Полный промпт">{html.escape(l.prompt_text)}</div>' if l.prompt_text else ""
         log_rows += (
             f"<tr><td>{fmt_dt(l.sent_at, u.timezone)}</td>"
-            f"<td>{'✅' if l.success else '❌'}</td>"
+            f"<td>{'✓' if l.success else '✗'}</td>"
             f"<td>{html.escape(l.source)}</td>"
             f"<td>{html.escape(l.goal_text or '')}</td>"
             f"<td>{img_cell}</td>"
             f"<td>{prompt_cell}</td>"
-            f"<td>{html.escape(l.error or '')}</td></tr>")
+            f"<td><span class='err'>{html.escape(l.error or '')}</span></td></tr>")
     if not log_rows:
-        log_rows = '<tr><td colspan="7"><i>нет отправок</i></td></tr>'
+        log_rows = '<tr><td colspan="7" class="empty">отправок пока не было</td></tr>'
 
     return f"""
-<div class="card">
+<div class="card user" data-status="{u.subscription_status.value}" data-search="{html.escape((u.username or '') + ' ' + str(u.telegram_id)).lower()}">
  <div class="uhead">
-  <input type="checkbox" class="sel" data-id="{u.telegram_id}">
+  <input type="checkbox" class="sel" data-id="{u.telegram_id}" title="Выбрать">
   <b>@{html.escape(u.username or '—')}</b><span class="uid">{u.telegram_id}</span>
   <span class="badge {u.subscription_status.value}">{u.subscription_status.value}</span>
   <span class="badge">{u.gender or 'пол не указан'}</span>
  </div>
  <div class="meta">
-  ТЗ: {u.timezone or '—'} · доставка: <b>{u.delivery_time or '—'}</b> ·
-  подписка до: {fmt_dt(u.subscription_end_date)} · последняя генерация: {fmt_dt(u.last_generation_at, u.timezone)}
+  <span>{icon('clock')} доставка <b>{u.delivery_time or '—'}</b></span>
+  <span>{u.timezone or 'ТЗ не указана'}</span>
+  <span>подписка до <b>{fmt_dt(u.subscription_end_date)}</b></span>
+  <span>генерация: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
  </div>
- <div class="thumbs">{thumbs or '<i>нет фото</i>'}</div>
- <div class="editrow"><input type="file" id="up{u.telegram_id}" multiple accept="image/*"
-   onchange="uploadPhotos({u.telegram_id}, this)">
- <button class="ghost" onclick="grant({u.telegram_id}, 30, this)">🗓 +30 дней доступа</button>
- <button class="ghost" onclick="grant({u.telegram_id}, 90, this)">🗓 +90 дней доступа</button></div>
-
- <details><summary>✏️ Редактировать профиль (цели, таймзона, время)</summary>
-  <div class="editrow">
-   <select id="tz{u.telegram_id}">{tz_opts}</select>
-   <input type="time" id="dt{u.telegram_id}" value="{delivery_val}">
-   <button onclick="saveProfile({u.telegram_id}, this)">💾 Сохранить ТЗ/время</button>
-  </div>
-  <div class="editrow">
-   <input type="text" id="ex{u.telegram_id}" value="{html.escape(u.prompt_extra or '')}"
-     style="flex:1" placeholder="Особые пожелания и ограничения к каждому фото (напр.: надпись с именем Ваня, летают голуби, без детей, только мужская компания)">
-   <button onclick="saveExtra({u.telegram_id}, this)">💾 Сохранить пожелания</button>
-  </div>
-  <textarea id="gl{u.telegram_id}" placeholder="По одной цели на строку">{html.escape(goals_text)}</textarea>
-  <div class="editrow"><button onclick="saveGoals({u.telegram_id}, this)">💾 Сохранить цели</button></div>
+ <div class="thumbs">
+  {thumbs or '<span class="empty">нет фото</span>'}
+  <input type="file" id="up{u.telegram_id}" multiple accept="image/*" style="display:none"
+    onchange="uploadPhotos({u.telegram_id}, this)">
+  <button class="uploadbtn" onclick="document.getElementById('up{u.telegram_id}').click()">{icon('upload')} Загрузить</button>
+ </div>
+ <div class="actions">
+  <button class="primary" onclick="sendNow({u.telegram_id}, this)">{icon('send')} Отправить сейчас</button>
+  <button class="grant" onclick="grant({u.telegram_id}, 30, this)">{icon('plus30')} +30 дн.</button>
+  <button class="grant" onclick="grant({u.telegram_id}, 90, this)">{icon('plus90')} +90 дн.</button>
+  <button onclick="openEdit({u.telegram_id})">{icon('edit')} Редактировать</button>
+ </div>
+ <details><summary>{icon('chevron')} История отправок ({len(logs)})</summary>
+ <table class="logtbl"><tr><th>Время</th><th></th><th>Тип</th><th>Цель</th><th>Картинка</th><th>Промпт</th><th>Ошибка</th></tr>{log_rows}</table>
  </details>
+</div>
 
- <button onclick="sendNow({u.telegram_id}, this)">⚡ Отправить сейчас</button>
- <div class="status" id="st{u.telegram_id}"></div>
- <table class="logtbl"><tr><th>Время ({u.timezone or 'UTC'})</th><th></th><th>Источник</th><th>Цель</th><th>Картинка</th><th>Промпт</th><th>Ошибка</th></tr>{log_rows}</table>
+<div class="modal-bg" id="m{u.telegram_id}" onclick="if(event.target===this)closeModal({u.telegram_id})">
+ <div class="modal">
+  <h3>Редактирование — @{html.escape(u.username or '—')}</h3>
+  <div class="field"><label>Часовой пояс</label>
+   <select id="tz{u.telegram_id}" style="width:100%">{tz_opts}</select></div>
+  <div class="field"><label>Время доставки (HH:MM)</label>
+   <input type="time" id="dt{u.telegram_id}" value="{delivery_val}" style="width:100%"></div>
+  <div class="field"><label>Особые пожелания и ограничения к каждому фото (напр.: надпись с именем Ваня, летают голуби, без детей, только мужская компания)</label>
+   <input type="text" id="ex{u.telegram_id}" value="{html.escape(u.prompt_extra or '')}" style="width:100%"></div>
+  <div class="field"><label>Цели — по одной на строку</label>
+   <textarea id="gl{u.telegram_id}">{html.escape(goals_text)}</textarea></div>
+  <div class="foot">
+   <button onclick="closeModal({u.telegram_id})">Отмена</button>
+   <button class="primary" onclick="saveAll({u.telegram_id}, this)">{icon('edit')} Сохранить всё</button>
+  </div>
+ </div>
 </div>"""
 
 
@@ -195,111 +300,134 @@ async def index(request):
     for lg in logs:
         logs_by_user.setdefault(lg.user_id, []).append(lg)
 
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    sent_today = sum(1 for l in logs if l.success and (l.sent_at or datetime.datetime.min).strftime("%Y-%m-%d") == today)
+    failed_today = sum(1 for l in logs if not l.success and (l.sent_at or datetime.datetime.min).strftime("%Y-%m-%d") == today)
+    n_active = sum(1 for u in users if u.subscription_status.value == "active")
+    n_trial = sum(1 for u in users if u.subscription_status.value == "trial")
+    n_expired = sum(1 for u in users if u.subscription_status.value == "expired")
+
     cards = "".join(user_card(u, logs_by_user.get(u.telegram_id, [])) for u in users)
     body = f"""
-<h1>Фото будущего — панель управления</h1>
-<div class="sub">Подписчиков: {len(users)} · Обнови страницу (F5), чтобы увидеть новые отправки</div>
-<div class="bulk">
- <label><input type="checkbox" id="all" onchange="toggleAll(this)"> выделить всех</label>
- <button onclick="sendSelected(this)">⚡ Отправить выбранным</button>
- <span class="status" id="bulkstatus"></span>
+<header class="topbar"><h1>Фото будущего</h1><span class="uid">панель управления</span>
+ <span class="spacer"></span>
+ <button onclick="location.reload()">{icon('chevron')} Обновить</button></header>
+
+<div class="stats">
+ <div class="stat"><div class="n">{len(users)}</div><div class="l">подписчиков</div></div>
+ <div class="stat ok"><div class="n">{n_active}</div><div class="l">активных</div></div>
+ <div class="stat"><div class="n">{n_trial}</div><div class="l">на триале</div></div>
+ <div class="stat warn"><div class="n">{n_expired}</div><div class="l">истекших</div></div>
+ <div class="stat ok"><div class="n">{sent_today}</div><div class="l">отправлено сегодня</div></div>
+ <div class="stat bad"><div class="n">{failed_today}</div><div class="l">ошибок сегодня</div></div>
 </div>
+
+<div class="filters">
+ <span class="search">{icon('search')}
+  <input type="text" id="q" placeholder="Поиск по имени или ID" oninput="applyFilters()"></span>
+ <span class="chip on" data-f="all" onclick="pickFilter(this)">Все</span>
+ <span class="chip" data-f="active" onclick="pickFilter(this)">Активные</span>
+ <span class="chip" data-f="trial" onclick="pickFilter(this)">Триал</span>
+ <span class="chip" data-f="expired" onclick="pickFilter(this)">Истекшие</span>
+ <span class="spacer" style="flex:1"></span>
+ <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer">
+  <input type="checkbox" id="all" onchange="toggleAll(this)"> выделить всех</label>
+ <button onclick="sendSelected(this)">{icon('send')} Отправить выбранным</button>
+</div>
+
 {cards}
-<div id="lightbox" onclick="this.style.display='none'"><img id="lbimg"></div>
+
 <script>
-function lb(src) {{ document.getElementById('lbimg').src = src; document.getElementById('lightbox').style.display = 'flex'; }}
-document.addEventListener('DOMContentLoaded', () => {{
-  document.querySelectorAll('.logtbl td img').forEach(i => i.onclick = () => lb(i.src));
-  document.querySelectorAll('.thumbwrap > img').forEach(i => i.onclick = () => lb(i.src));
-}});
-</script>
-<script>
+const $ = id => document.getElementById(id);
+function toast(msg, err=false) {{
+  const t = document.createElement('div');
+  t.className = 'toast' + (err ? ' err' : '');
+  t.textContent = msg;
+  $('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}}
+let curFilter = 'all';
+function pickFilter(el) {{
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on'); curFilter = el.dataset.f; applyFilters();
+}}
+function applyFilters() {{
+  const q = $('q').value.trim().toLowerCase();
+  document.querySelectorAll('.card.user').forEach(c => {{
+    const okS = !q || c.dataset.search.includes(q);
+    const okF = curFilter === 'all' || c.dataset.status === curFilter;
+    c.style.display = (okS && okF) ? '' : 'none';
+  }});
+}}
 function toggleAll(cb) {{ document.querySelectorAll('.sel').forEach(c => c.checked = cb.checked); }}
-function st(id) {{ return document.getElementById('st' + id); }}
+function openEdit(id) {{ $('m' + id).style.display = 'flex'; }}
+function closeModal(id) {{ $('m' + id).style.display = 'none'; }}
 async function sendNow(id, btn) {{
   if (!confirm('Сгенерировать и отправить картинку юзеру ' + id + '?')) return;
-  btn.disabled = true; st(id).textContent = '⏳ генерация (~1-2 мин)...';
-  const r = await fetch('/api/send?id=' + id);
-  const j = await r.json();
-  if (j.ok) {{ st(id).textContent = '✅ отправлено!'; setTimeout(() => location.reload(), 1500); }}
-  else st(id).textContent = '❌ ' + (j.error || 'ошибка');
+  btn.disabled = true; toast('⏳ генерация, это занимает 1-2 минуты');
+  const r = await fetch('/api/send?id=' + id); const j = await r.json();
+  if (j.ok) {{ toast('✅ отправлено юзеру ' + id); setTimeout(() => location.reload(), 1500); }}
+  else toast('❌ ' + (j.error || 'ошибка'), true);
   btn.disabled = false;
 }}
 async function sendSelected(btn) {{
-  const ids = [...document.querySelectorAll('.sel')].filter(c => c.checked).map(c => c.dataset.id);
-  if (!ids.length) {{ alert('Никого не выбрано'); return; }}
+  const ids = [...document.querySelectorAll('.sel')].filter(c => c.checked && c.closest('.card').style.display !== 'none').map(c => c.dataset.id);
+  if (!ids.length) {{ toast('Никого не выбрано', true); return; }}
   if (!confirm('Отправить ' + ids.length + ' юзерам?')) return;
-  btn.disabled = true; document.getElementById('bulkstatus').textContent = '⏳ генерация...';
-  const r = await fetch('/api/send?ids=' + ids.join(','));
-  const j = await r.json();
-  document.getElementById('bulkstatus').textContent = j.ok ? '✅ запущено, обнови страницу через пару минут' : '❌ ' + j.error;
+  btn.disabled = true; toast('⏳ генерация для ' + ids.length + ' юзеров...');
+  const r = await fetch('/api/send?ids=' + ids.join(',')); const j = await r.json();
+  toast(j.ok ? '✅ запущено' : '❌ ' + j.error, !j.ok);
   btn.disabled = false;
 }}
 async function grant(id, days, btn) {{
   if (!confirm('Продлить доступ юзеру ' + id + ' на ' + days + ' дней?')) return;
   btn.disabled = true;
-  const r = await fetch('/api/grant?id=' + id + '&days=' + days);
-  const j = await r.json();
-  if (j.ok) {{ st(id).textContent = '✅ доступ продлён на ' + days + ' дн. (до ' + j.until + ')'; setTimeout(() => location.reload(), 1500); }}
-  else st(id).textContent = '❌ ' + (j.error || 'ошибка');
+  const r = await fetch('/api/grant?id=' + id + '&days=' + days); const j = await r.json();
+  if (j.ok) {{ toast('✅ доступ до ' + j.until); setTimeout(() => location.reload(), 1200); }}
+  else toast('❌ ' + j.error, true);
   btn.disabled = false;
 }}
 async function delPhoto(id, photoId, btn) {{
   if (!confirm('Удалить это фото-референс?')) return;
   btn.disabled = true;
-  const r = await fetch('/api/del_photo?id=' + id + '&photo=' + photoId);
-  const j = await r.json();
-  if (j.ok) btn.closest('.thumbwrap').remove();
-  else alert('Ошибка: ' + (j.error || ''));
+  const r = await fetch('/api/del_photo?id=' + id + '&photo=' + photoId); const j = await r.json();
+  if (j.ok) {{ btn.closest('.thumbwrap').remove(); toast('Фото удалено'); }}
+  else toast('❌ ' + j.error, true);
 }}
 async function uploadPhotos(id, input) {{
   if (!input.files.length) return;
   const fd = new FormData();
   for (const f of input.files) fd.append('files', f);
-  st(id).textContent = '⏳ загрузка фото...';
-  const r = await fetch('/api/upload?id=' + id, {{ method: 'POST', body: fd }});
-  const j = await r.json();
-  if (j.ok) {{ st(id).textContent = '✅ фото загружены (' + j.added + ')'; setTimeout(() => location.reload(), 1200); }}
-  else st(id).textContent = '❌ ' + (j.error || 'ошибка');
+  toast('⏳ загрузка ' + input.files.length + ' фото...');
+  const r = await fetch('/api/upload?id=' + id, {{ method: 'POST', body: fd }}); const j = await r.json();
+  if (j.ok) {{ toast('✅ загружено: ' + j.added); setTimeout(() => location.reload(), 1000); }}
+  else toast('❌ ' + j.error, true);
   input.value = '';
 }}
-async function saveProfile(id, btn) {{
+async function saveAll(id, btn) {{
   btn.disabled = true;
-  const tz = document.getElementById('tz' + id).value;
-  const dt = document.getElementById('dt' + id).value;
-  const r = await fetch('/api/profile', {{ method: 'POST',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ id, timezone: tz, delivery_time: dt }}) }});
+  const body = {{ id, timezone: $('tz' + id).value, delivery_time: $('dt' + id).value,
+                 extra: $('ex' + id).value, goals: $('gl' + id).value }};
+  const r = await fetch('/api/save_all', {{ method: 'POST',
+    headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify(body) }});
   const j = await r.json();
-  st(id).textContent = j.ok ? '✅ сохранено' : '❌ ' + (j.error || 'ошибка');
-  if (j.ok) setTimeout(() => location.reload(), 1200);
-  btn.disabled = false;
+  if (j.ok) {{ toast('✅ сохранено (' + j.count + ' целей)'); closeModal(id); setTimeout(() => location.reload(), 1000); }}
+  else {{ toast('❌ ' + j.error, true); btn.disabled = false; }}
 }}
-async function saveExtra(id, btn) {{
-  btn.disabled = true;
-  const r = await fetch('/api/extra', {{ method: 'POST',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ id, extra: document.getElementById('ex' + id).value }}) }});
-  const j = await r.json();
-  st(id).textContent = j.ok ? '✅ пожелания сохранены' : '❌ ' + (j.error || 'ошибка');
-  btn.disabled = false;
-}}
-async function saveGoals(id, btn) {{
-  btn.disabled = true;
-  const goals = document.getElementById('gl' + id).value;
-  const r = await fetch('/api/goals', {{ method: 'POST',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ id, goals }}) }});
-  const j = await r.json();
-  st(id).textContent = j.ok ? '✅ цели сохранены (' + j.count + ')' : '❌ ' + (j.error || 'ошибка');
-  if (j.ok) setTimeout(() => location.reload(), 1200);
-  btn.disabled = false;
-}}
+function lb(src) {{ $('lbimg').src = src; $('lightbox').style.display = 'flex'; }}
+document.addEventListener('DOMContentLoaded', () => {{
+  document.querySelectorAll('.logtbl td img, .thumbwrap > img').forEach(i => i.onclick = () => lb(i.src));
+}});
 </script>"""
     return web.Response(text=page(body), content_type="text/html")
 
 
 _send_locks: set = set()
+
+
+def task_engine():
+    engine = create_async_engine(settings.DATABASE_URL)
+    return engine, async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def api_send(request):
@@ -312,18 +440,12 @@ async def api_send(request):
         ids = [int(q["id"])]
     else:
         return web.json_response({"ok": False, "error": "no id"})
-
     for uid in ids:
         if uid in _send_locks:
             return web.json_response({"ok": False, "error": f"задача для {uid} уже выполняется"})
     _send_locks.update(ids)
     asyncio.get_event_loop().create_task(_send_to_users(ids))
     return web.json_response({"ok": True, "queued": ids})
-
-
-def task_engine():
-    engine = create_async_engine(settings.DATABASE_URL)
-    return engine, async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def _send_to_users(ids):
@@ -343,7 +465,6 @@ async def _send_to_users(ids):
                 gender = u.gender or "male"
                 ai = await generate_prompt_and_affirmation(goal.goal_text, gender, u.prompt_extra)
                 result = await generate_image_with_face(ai['prompt'], ai['affirmation'], photos, gender, u.prompt_extra)
-                scene_text = getattr(result, "scene_text", None)
                 if isinstance(result, str):
                     import aiohttp as ah
                     async with ah.ClientSession() as hs:
@@ -360,7 +481,7 @@ async def _send_to_users(ids):
                     uu.last_generation_at = datetime.datetime.utcnow()
                     await s2.commit()
                 await record_delivery(u.telegram_id, "manual", goal.goal_text, image_path=img_path,
-                                      prompt_text=scene_text)
+                                      prompt_text=getattr(result, "scene_text", None))
             except Exception as e:
                 try:
                     await record_delivery(u.telegram_id, "manual", None, success=False, error=e)
@@ -401,7 +522,7 @@ async def api_grant(request):
         await engine.dispose()
 
 
-async def api_profile(request):
+async def api_save_all(request):
     if not check_login(request):
         return web.json_response({"ok": False, "error": "unauthorized"})
     data = await request.json()
@@ -416,24 +537,9 @@ async def api_profile(request):
             dt = data.get("delivery_time")
             if dt:
                 u.delivery_time = datetime.datetime.strptime(dt, "%H:%M").time()
-            await session.commit()
-        return web.json_response({"ok": True})
-    except Exception as e:
-        return web.json_response({"ok": False, "error": str(e)})
-    finally:
-        await engine.dispose()
-
-
-async def api_goals(request):
-    if not check_login(request):
-        return web.json_response({"ok": False, "error": "unauthorized"})
-    data = await request.json()
-    uid = int(data["id"])
-    goals = [g.strip() for g in (data.get("goals") or "").splitlines()
-             if g.strip() and len(g.strip()) > 2][:10]
-    engine, S = task_engine()
-    try:
-        async with S() as session:
+            u.prompt_extra = (data.get("extra") or "").strip() or None
+            goals = [g.strip() for g in (data.get("goals") or "").splitlines()
+                     if g.strip() and len(g.strip()) > 2][:10]
             await session.execute(delete(Goal).where(Goal.user_id == uid))
             for g in goals:
                 session.add(Goal(user_id=uid, goal_text=g))
@@ -496,26 +602,6 @@ async def api_del_photo(request):
         await engine.dispose()
 
 
-async def api_extra(request):
-    if not check_login(request):
-        return web.json_response({"ok": False, "error": "unauthorized"})
-    data = await request.json()
-    uid = int(data["id"])
-    engine, S = task_engine()
-    try:
-        async with S() as session:
-            u = await session.get(User, uid)
-            if not u:
-                return web.json_response({"ok": False, "error": "user not found"})
-            u.prompt_extra = (data.get("extra") or "").strip() or None
-            await session.commit()
-        return web.json_response({"ok": True})
-    except Exception as e:
-        return web.json_response({"ok": False, "error": str(e)})
-    finally:
-        await engine.dispose()
-
-
 async def photo_handler(request):
     if not check_login(request):
         return web.HTTPForbidden()
@@ -539,9 +625,7 @@ routes.router.add_get("/login", login_handler)
 routes.router.add_post("/login", login_handler)
 routes.router.add_get("/api/send", api_send)
 routes.router.add_get("/api/grant", api_grant)
-routes.router.add_post("/api/profile", api_profile)
-routes.router.add_post("/api/goals", api_goals)
-routes.router.add_post("/api/extra", api_extra)
+routes.router.add_post("/api/save_all", api_save_all)
 routes.router.add_post("/api/upload", api_upload)
 routes.router.add_get("/api/del_photo", api_del_photo)
 routes.router.add_get("/photo/{name}", photo_handler)
