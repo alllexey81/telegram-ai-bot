@@ -132,24 +132,26 @@ button:focus-visible, .chip:focus-visible {{ outline:2px solid var(--accent); ou
 .meta svg {{ width:14px; height:14px; vertical-align:-2px; }}
 .meta b {{ color:var(--fg); font-weight:500; }}
 
-.thumbs {{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; align-items:center; }}
+.thumbs {{ display:flex; gap:22px; flex-wrap:wrap; margin:10px 0; align-items:flex-start; }}
+.catgroup {{ display:flex; flex-direction:column; gap:6px; }}
+.catlabel {{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--fg-muted);
+  height:16px; display:flex; align-items:center; }}
+.catgroup-thumbs {{ display:flex; gap:8px; align-items:stretch; }}
+.catgroup .thumbwrap img {{ width:72px; height:72px; }}
+.catgroup .uploadbtn {{ height:72px; width:72px; padding:0 4px; font-size:10px; justify-content:center; gap:4px; }}
+.catgroup .uploadbtn svg {{ width:15px; height:15px; }}
 .thumbwrap {{ position:relative; }}
-.thumbwrap img {{ width:80px; height:80px; object-fit:cover; border-radius:10px; border:1px solid var(--border); cursor:zoom-in; }}
+.thumbwrap img {{ object-fit:cover; border-radius:10px; border:1px solid var(--border); cursor:zoom-in; }}
 .thumbwrap img:hover {{ border-color:var(--accent); }}
 .thumbwrap .del {{ position:absolute; top:-7px; right:-7px; background:var(--danger); color:#fff; border:0;
   border-radius:50%; width:22px; height:22px; cursor:pointer; display:grid; place-items:center; padding:0; }}
 .thumbwrap .del svg {{ width:11px; height:11px; }}
-.uploadbtn {{ border-style:dashed; color:var(--fg-muted); height:80px; width:110px; justify-content:center; }}
+.uploadbtn {{ border-style:dashed; color:var(--fg-muted); }}
 .actions {{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }}
 .goals-preview {{ display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 10px; }}
 .gchip {{ background:var(--muted); border:1px solid var(--border); border-radius:999px;
   padding:3px 12px; font-size:12.5px; color:#c6cddb; }}
 .gchip.more {{ color:var(--accent); border-color:var(--accent); }}
-.catgroup {{ margin-right:14px; }}
-.catlabel {{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--fg-muted); margin-bottom:5px; }}
-.catgroup-thumbs {{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }}
-.catgroup .uploadbtn {{ height:64px; width:86px; font-size:11px; }}
-.catgroup .thumbwrap img {{ width:64px; height:64px; }}
 
 .logtbl {{ width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }}
 .logtbl th, .logtbl td {{ border-bottom:1px solid var(--muted); padding:7px 8px; text-align:left; vertical-align:top; }}
@@ -224,10 +226,10 @@ def user_card(u, logs) -> str:
             for p in u.photos if (p.category or "me") == cat_key)
         uid = str(u.telegram_id)
         up_input = ('<input type="file" id="up' + uid + '_' + cat_key + '" multiple accept="image/*" style="display:none" onchange="uploadPhotos(' + uid + ', \'' + cat_key + '\', this)">')
-        up_btn = ('<button class="uploadbtn" onclick="document.getElementById(\'up' + uid + '_' + cat_key + '\').click()">' + icon('upload') + ' Загрузить</button>')
-        empty_ph = "<span class='empty'>—</span>"
+        up_btn = ('<button class="uploadbtn" onclick="document.getElementById(\'up' + uid + '_' + cat_key + '\').click()" title="Загрузить фото">'
+                  + icon('upload') + '</button>')
         thumbs += ('<div class="catgroup"><div class="catlabel">' + cat_label + '</div>'
-            + '<span class="catgroup-thumbs">' + (cat_thumbs or empty_ph)
+            + '<span class="catgroup-thumbs">' + cat_thumbs
             + up_input + up_btn + '</span></div>')
     goals_text = "\n".join(g.goal_text for g in u.goals)
     tz_opts = "".join(
