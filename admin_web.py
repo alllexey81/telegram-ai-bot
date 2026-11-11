@@ -239,6 +239,18 @@ def user_card(u, logs) -> str:
         f'<option value="{d}"{" selected" if d == interval else ""}>{("каждый день" if d == 1 else f"раз в {d} дн.")}</option>'
         for d in (1, 2, 3, 5, 7, 14, 30))
     interval_label = "каждый день" if interval == 1 else f"раз в {interval} дн."
+    # Следующая плановая отправка: последняя генерация + интервал (в таймзоне юзера)
+    next_send = "—"
+    if u.last_generation_at and u.timezone:
+        try:
+            next_utc = u.last_generation_at + datetime.timedelta(days=interval)
+            next_local = next_utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone(u.timezone))
+            overdue = next_utc < datetime.datetime.utcnow()
+            next_send = ("~ " + next_local.strftime("%d.%m %H:%M")) + (" (уже пора)" if overdue else "")
+        except Exception:
+            pass
+    elif not u.last_generation_at:
+        next_send = "первая — по расписанию"
     goal_items = [g.goal_text for g in u.goals]
     if goal_items:
         goals_preview = "".join(
@@ -277,6 +289,7 @@ def user_card(u, logs) -> str:
   <span>{u.timezone or 'ТЗ не указана'}</span>
   <span>до <b>{fmt_dt(u.subscription_end_date)}</b></span>
   <span>ген.: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
+  <span>след.: <b style="color:{'var(--warn)' if 'уже пора' in next_send else 'var(--accent)'}">{next_send}</b></span>
  </div>
  <div class="goals-preview">{goals_preview}</div>
  <div class="thumbs">{thumbs}</div>
