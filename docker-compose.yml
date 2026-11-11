@@ -22,7 +22,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "${PHOTO_PORT:-8000}:8000"
 
   admin_web:
     build: .
