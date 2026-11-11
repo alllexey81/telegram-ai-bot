@@ -289,7 +289,8 @@ def user_card(u, logs) -> str:
   <span>{u.timezone or 'ТЗ не указана'}</span>
   <span>до <b>{fmt_dt(u.subscription_end_date)}</b></span>
   <span>ген.: <b>{fmt_dt(u.last_generation_at, u.timezone)}</b></span>
-  <span>след.: <b style="color:{'var(--warn)' if 'уже пора' in next_send else 'var(--accent)'}">{next_send}</b></span>
+  <span>след.: <b style="color:{'var(--warn)' if 'уже пора' in next_send else 'var(--accent)'}">{next_send}</b>
+   <span class="badge">{interval_label}</span></span>
  </div>
  <div class="goals-preview">{goals_preview}</div>
  <div class="thumbs">{thumbs}</div>
