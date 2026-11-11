@@ -132,14 +132,14 @@ button:focus-visible, .chip:focus-visible {{ outline:2px solid var(--accent); ou
 .meta svg {{ width:14px; height:14px; vertical-align:-2px; }}
 .meta b {{ color:var(--fg); font-weight:500; }}
 
-.thumbs {{ display:flex; gap:22px; flex-wrap:wrap; margin:10px 0; align-items:flex-start; }}
-.catgroup {{ display:flex; flex-direction:column; gap:6px; }}
-.catlabel {{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--fg-muted);
-  height:16px; display:flex; align-items:center; }}
-.catgroup-thumbs {{ display:flex; gap:8px; align-items:stretch; }}
-.catgroup .thumbwrap img {{ width:72px; height:72px; }}
-.catgroup .uploadbtn {{ height:72px; width:72px; padding:0 4px; font-size:10px; justify-content:center; gap:4px; }}
-.catgroup .uploadbtn svg {{ width:15px; height:15px; }}
+.thumbs {{ display:flex; flex-direction:column; gap:10px; margin:10px 0; }}
+.catgroup {{ display:flex; align-items:center; gap:12px; }}
+.catlabel {{ width:92px; flex-shrink:0; font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+  color:var(--fg-muted); }}
+.catgroup-thumbs {{ display:flex; gap:8px; align-items:center; }}
+.catgroup .thumbwrap img {{ width:64px; height:64px; }}
+.catgroup .uploadbtn {{ height:64px; width:64px; padding:0; font-size:10px; justify-content:center; }}
+.catgroup .uploadbtn svg {{ width:14px; height:14px; }}
 .thumbwrap {{ position:relative; }}
 .thumbwrap img {{ object-fit:cover; border-radius:10px; border:1px solid var(--border); cursor:zoom-in; }}
 .thumbwrap img:hover {{ border-color:var(--accent); }}
